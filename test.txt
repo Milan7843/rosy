@@ -1,0 +1,36 @@
+f = a * b + c / d ^3
+str = "ba ba +-/*&^and "
+g = false
+h = true
+i = g or h
+j = g and h
+k = g == h
+
+if g == true
+    l = 5 + 6 * 2
+else if h
+    l = 5 + 6 * 3
+else
+	l = 7
+
+fun five()
+    return 5
+
+fun timestwo(a)
+    return a * 2
+
+fun add(a, b)
+    return a + b
+
+fun addthree(a, b, c)
+    return a + b + c
+
+for m in 6
+    if m == 4
+        break
+
+five()
+x = five() + five()
+x = add(2, 3, 5)
+x = add(five(), five())
+x = add(add(2, 3), addthree(add(1, 1), 1, timestwo(1)))
