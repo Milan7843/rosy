@@ -15,7 +15,7 @@ fn get_char_type(c: char) -> CharType {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum SymbolType {
     Equals,
     Plus,
@@ -39,9 +39,11 @@ pub enum SymbolType {
     Return,
     Break,
     PlusEquals,
+    True,
+    False,
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Token {
     Variable { name: String },
     Symbol { symbol_type: SymbolType },
@@ -49,6 +51,7 @@ pub enum Token {
     String { value: String },
 }
 
+#[derive(PartialEq, Debug)]
 pub struct TokenLine {
     pub tokens: Vec<Token>,
     pub indentation: i32,
@@ -81,6 +84,8 @@ fn get_symbol_type(symbol: &String) -> Result<SymbolType, String> {
         s if s == "return" => Ok(SymbolType::Return),
         s if s == "break" => Ok(SymbolType::Break),
         s if s == "+=" => Ok(SymbolType::PlusEquals),
+        s if s == "true" => Ok(SymbolType::True),
+        s if s == "false" => Ok(SymbolType::False),
         _ => Err(String::from("String is not a Symbol")),
     }
 }
@@ -109,6 +114,8 @@ fn get_symbol_from_type(symbol_type: &SymbolType) -> String {
         SymbolType::Return => String::from("return"),
         SymbolType::Break => String::from("break"),
         SymbolType::PlusEquals => String::from("+="),
+        SymbolType::True => String::from("true"),
+        SymbolType::False => String::from("false"),
     }
 }
 
@@ -191,7 +198,7 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
     for line in lines {
         let mut line_cleaned = line.replace("\r", "");
         // Removing empty lines
-        if line_cleaned.replace(" ", "").len() == 0 {
+        if line_cleaned.replace(" ", "").replace("\t", "").len() == 0 {
             continue;
         }
         line_cleaned = line_cleaned.replace("\t", "");
@@ -207,7 +214,10 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
             Err(error_message) => return Err(error_message),
         };
 
-        let mut token_line: TokenLine = TokenLine { tokens: Vec::new(), indentation: indentation };
+        let mut token_line: TokenLine = TokenLine {
+            tokens: Vec::new(),
+            indentation: indentation,
+        };
 
         let mut in_number = false;
         let mut current_number = 0;
@@ -250,7 +260,7 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
             }
 
             // If we move out of a variable
-            if in_variable && char_type != CharType::Variable {
+            if in_variable && char_type != CharType::Variable && char_type != CharType::Number {
                 // The string might be a symbol so we check for that
                 match get_symbol_type(&current_variable) {
                     // String was a symbol
@@ -315,6 +325,12 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
                 }
 
                 CharType::Number => {
+                    // It is possible to add numbers to variables, but variables may not start with a number
+                    if in_variable {
+                        current_variable.push(c);
+                        continue;
+                    }
+
                     in_number = true;
                     if let Some(number) = c.to_digit(10) {
                         current_number = current_number * 10 + number as i32;

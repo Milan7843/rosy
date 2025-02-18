@@ -1,9 +1,8 @@
 use crate::tokenizer;
-use crate::tokenizer::TokenLine;
-use crate::tokenizer::Token;
 use crate::tokenizer::SymbolType;
+use crate::tokenizer::Token;
+use crate::tokenizer::TokenLine;
 use std::f32::consts::{E, PI};
-
 
 #[derive(PartialEq, Debug)]
 pub enum BaseExpr {
@@ -19,12 +18,14 @@ pub enum BaseExpr {
         expr: RecExpr,
     },
     IfStatement {
-        clause: RecExpr,
+        condition: RecExpr,
         body: Vec<BaseExpr>,
+        else_statement: Option<Box<BaseExpr>>,
     },
     ElseIfStatement {
-        clause: RecExpr,
+        condition: RecExpr,
         body: Vec<BaseExpr>,
+        else_statement: Option<Box<BaseExpr>>,
     },
     ElseStatement {
         body: Vec<BaseExpr>,
@@ -56,8 +57,9 @@ pub enum RecExpr {
     String {
         value: String,
     },
-    False,
-    True,
+    Boolean {
+        value: bool,
+    },
     Assign {
         variable_name: String,
         right: Box<RecExpr>,
@@ -119,6 +121,9 @@ enum GenExpr {
     String {
         value: String,
     },
+    Boolean {
+        value: bool,
+    },
     UnaryOp {
         operator: SymbolType,
         operand: Box<GenExpr>,
@@ -158,17 +163,40 @@ pub fn parse_strings(lines: Vec<&str>) -> Result<Vec<BaseExpr>, String> {
         Err(error_message) => return Err(error_message),
     };
 
-    return Ok(base_expressions);
+    // Third, merge subsequent if statements
+    let merged_base_expressions = match merge_if_statements(base_expressions) {
+        Ok(base_expressions) => base_expressions,
+        Err(error_message) => return Err(error_message),
+    };
+
+    return Ok(merged_base_expressions);
 }
 
 fn get_first_occurence(
     tokens: &[Token],
     match_on: Vec<SymbolType>,
 ) -> Result<(SymbolType, usize), String> {
+    let mut indentation_depth = 0;
+
     for (i, token) in tokens.iter().enumerate() {
+        // Keep track of the indentation depth
+        match token {
+            Token::Symbol {
+                symbol_type: SymbolType::ParenthesisOpen,
+            } => indentation_depth += 1,
+            Token::Symbol {
+                symbol_type: SymbolType::ParenthesisClosed,
+            } => indentation_depth -= 1,
+            _ => {}
+        }
+        // We are only looking for top-level symbols,
+        // so if we are inside a parenthesis, we skip
+        if indentation_depth > 0 {
+            continue;
+        }
+
         for symbol_type in &match_on {
-            if *token
-                == (Token::Symbol {
+            if *token == (Token::Symbol {
                     symbol_type: symbol_type.clone(),
                 })
             {
@@ -197,6 +225,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
         GenExpr::Variable { name } => return Ok(RecExpr::Variable { name }),
         GenExpr::Number { number } => return Ok(RecExpr::Number { number }),
         GenExpr::String { value } => return Ok(RecExpr::String { value }),
+        GenExpr::Boolean { value } => return Ok(RecExpr::Boolean { value }),
         GenExpr::UnaryOp { operator, operand } => match operator {
             SymbolType::Minus => match generic_expression_to_recursive_expression(*operand) {
                 Ok(operand_expr) => {
@@ -498,9 +527,25 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, String> {
 
         // Just a string
         [Token::String { value }] => {
-            return Ok(GenExpr::Variable {
-                name: value.clone(),
+            return Ok(GenExpr::String {
+                value: value.clone(),
             });
+        }
+
+        // True
+        [Token::Symbol {
+            symbol_type: SymbolType::True,
+        }] => {
+            // Parentheses detected
+            return Ok(GenExpr::Boolean { value: true });
+        }
+
+        // False
+        [Token::Symbol {
+            symbol_type: SymbolType::False,
+        }] => {
+            // Parentheses detected
+            return Ok(GenExpr::Boolean { value: false });
         }
 
         _ => return Err(String::from("No matching expression found")),
@@ -555,14 +600,13 @@ fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token])
                     } => {
                         // Check if we're in main body of the function call
                         if parenthesis_depth == 1 {
-
                             // Attempt to get an expression from all tokens up until this comma
                             match get_generic_expression(&line[0..i]) {
                                 Ok(expr) => return Ok((Some(expr), &line[i + 1..])),
                                 Err(_) => continue,
                             }
                         }
-                    },
+                    }
                     Token::Symbol {
                         symbol_type: SymbolType::ParenthesisOpen,
                     } => parenthesis_depth += 1,
@@ -587,15 +631,133 @@ fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token])
     }
 }
 
-fn get_base_expressions(token_lines: &Vec<TokenLine>) -> Result<Vec<BaseExpr>, String> {
+fn add_to_if_statement(if_statement: &mut BaseExpr, else_statement_to_add: BaseExpr) -> Result<String, String> {
+    match if_statement {
+        BaseExpr::IfStatement { else_statement, .. }
+        | BaseExpr::ElseIfStatement { else_statement, .. } => {
+            match else_statement {
+                Some(embedded_if_statement) => {
+                    return add_to_if_statement(embedded_if_statement, else_statement_to_add);
+                }
+                None => {
+                    *else_statement = Some(Box::new(else_statement_to_add));
+                    return Ok(String::from("OK"));
+                }
+            }
+        }
+        _ => return Err(String::from("Could not find if statement to add else statement to")),
+    }
+}
 
+fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>, String> {
+    let mut merged_statements = Vec::new();
+
+    // This can probably be done with copying every single item...
+
+    for base_expression in base_expressions {
+        match base_expression {
+            BaseExpr::IfStatement { condition, body, else_statement } => {
+                // Recursively merge if statements in the body
+                let merged_body = match merge_if_statements(body) {
+                    Ok(body) => body,
+                    Err(e) => return Err(e),
+                };
+
+                merged_statements.push(BaseExpr::IfStatement {
+                    condition: condition,
+                    body: merged_body,
+                    else_statement: else_statement
+                });
+            }
+            BaseExpr::ElseIfStatement { condition, body, .. } => {
+                // Recursively merge if statements in the body
+                let merged_body = match merge_if_statements(body) {
+                    Ok(body) => body,
+                    Err(e) => return Err(e),
+                };
+
+                match merged_statements.last_mut() {
+                    Some(upper_if_statement @ BaseExpr::IfStatement { .. }) => {
+                        match add_to_if_statement(upper_if_statement, BaseExpr::ElseIfStatement {
+                            condition,
+                            body: merged_body,
+                            else_statement: None,
+                        }) {
+                            Ok(_) => {}
+                            Err(e) => return Err(e),
+                        }
+                    }
+                    _ => {
+                        return Err(String::from("Found no if statement to attach else if statement to"));
+                    }
+                }
+            }
+            BaseExpr::ElseStatement { body } => {
+                // Recursively merge if statements in the body
+                let merged_body = match merge_if_statements(body) {
+                    Ok(body) => body,
+                    Err(e) => return Err(e),
+                };
+
+                match merged_statements.last_mut() {
+                    Some(upper_if_statement @ BaseExpr::IfStatement { .. }) => {
+                        match add_to_if_statement(upper_if_statement, BaseExpr::ElseStatement {
+                            body: merged_body,
+                        }) {
+                            Ok(_) => {}
+                            Err(e) => return Err(e),
+                        }
+                    }
+                    _ => {
+                        return Err(String::from("Found no if statement to attach else statement to"));
+                    }
+                }
+            }
+            BaseExpr::ForLoop { var_name, until, body } => {
+                // Recursively merge if statements in the body
+                let merged_body = match merge_if_statements(body) {
+                    Ok(body) => body,
+                    Err(e) => return Err(e),
+                };
+
+                merged_statements.push(BaseExpr::ForLoop {
+                    var_name: var_name,
+                    until: until,
+                    body: merged_body,
+                });
+            }
+            BaseExpr::FunctionDefinition { fun_name, args, body } => {
+                // Recursively merge if statements in the body
+                let merged_body = match merge_if_statements(body) {
+                    Ok(body) => body,
+                    Err(e) => return Err(e),
+                };
+
+                merged_statements.push(BaseExpr::FunctionDefinition {
+                    fun_name: fun_name,
+                    args: args,
+                    body: merged_body,
+                });
+            }
+            other => {
+                merged_statements.push(other);
+            }
+        }
+    }
+
+    return Ok(merged_statements);
+}
+
+fn get_base_expressions(token_lines: &Vec<TokenLine>) -> Result<Vec<BaseExpr>, String> {
     let mut line_iterator = token_lines.iter().peekable();
 
     return get_base_expressions_with_indentation(&mut line_iterator, 0);
 }
 
-fn get_base_expressions_with_indentation(token_lines_iter: &mut std::iter::Peekable<std::slice::Iter<'_, TokenLine>>, indentation: i32) -> Result<Vec<BaseExpr>, String> {
-
+fn get_base_expressions_with_indentation(
+    token_lines_iter: &mut std::iter::Peekable<std::slice::Iter<'_, TokenLine>>,
+    indentation: i32,
+) -> Result<Vec<BaseExpr>, String> {
     let mut expressions = Vec::new();
 
     while let Some(token_line) = token_lines_iter.peek() {
@@ -613,7 +775,9 @@ fn get_base_expressions_with_indentation(token_lines_iter: &mut std::iter::Peeka
     return Ok(expressions);
 }
 
-fn get_base_expression(token_lines_iter: &mut std::iter::Peekable<std::slice::Iter<'_, TokenLine>>) -> Result<BaseExpr, String> {
+fn get_base_expression(
+    token_lines_iter: &mut std::iter::Peekable<std::slice::Iter<'_, TokenLine>>,
+) -> Result<BaseExpr, String> {
     let Some(token_line) = token_lines_iter.next() else {
         return Err(String::from("No more lines found"));
     };
@@ -648,40 +812,40 @@ fn get_base_expression(token_lines_iter: &mut std::iter::Peekable<std::slice::It
         [Token::Symbol {
             symbol_type: SymbolType::If,
         }, rest @ ..] => {
-            let clause = match get_expression(rest) {
+            let condition = match get_expression(rest) {
                 Ok(expression) => expression,
                 Err(error_message) => return Err(error_message),
             };
 
-            let body = match get_base_expressions_with_indentation(token_lines_iter, token_line.indentation + 1) {
+            let body = match get_base_expressions_with_indentation(
+                token_lines_iter,
+                token_line.indentation + 1,
+            ) {
                 Ok(body) => body,
                 Err(e) => return Err(e),
             };
 
-            return Ok(BaseExpr::IfStatement {
-                clause,
-                body,
-            });
+            return Ok(BaseExpr::IfStatement { condition, body, else_statement: None });
         }
         [Token::Symbol {
             symbol_type: SymbolType::Else,
         }, Token::Symbol {
             symbol_type: SymbolType::If,
         }, rest @ ..] => {
-            let clause = match get_expression(rest) {
+            let condition = match get_expression(rest) {
                 Ok(expression) => expression,
                 Err(error_message) => return Err(error_message),
             };
 
-            let body = match get_base_expressions_with_indentation(token_lines_iter, token_line.indentation + 1) {
+            let body = match get_base_expressions_with_indentation(
+                token_lines_iter,
+                token_line.indentation + 1,
+            ) {
                 Ok(body) => body,
                 Err(e) => return Err(e),
             };
 
-            return Ok(BaseExpr::ElseIfStatement {
-                clause,
-                body,
-            });
+            return Ok(BaseExpr::ElseIfStatement { condition, body, else_statement: None });
         }
         [Token::Symbol {
             symbol_type: SymbolType::Else,
@@ -690,7 +854,10 @@ fn get_base_expression(token_lines_iter: &mut std::iter::Peekable<std::slice::It
                 return Err(String::from("Unexpected extra tokens on else statement"));
             }
 
-            let body = match get_base_expressions_with_indentation(token_lines_iter, token_line.indentation + 1) {
+            let body = match get_base_expressions_with_indentation(
+                token_lines_iter,
+                token_line.indentation + 1,
+            ) {
                 Ok(body) => body,
                 Err(e) => return Err(e),
             };
@@ -718,7 +885,10 @@ fn get_base_expression(token_lines_iter: &mut std::iter::Peekable<std::slice::It
                 Err(error_message) => return Err(error_message),
             };
 
-            let body = match get_base_expressions_with_indentation(token_lines_iter, token_line.indentation + 1) {
+            let body = match get_base_expressions_with_indentation(
+                token_lines_iter,
+                token_line.indentation + 1,
+            ) {
                 Ok(body) => body,
                 Err(e) => return Err(e),
             };
@@ -741,7 +911,10 @@ fn get_base_expression(token_lines_iter: &mut std::iter::Peekable<std::slice::It
                 Err(e) => return Err(e),
             };
 
-            let body = match get_base_expressions_with_indentation(token_lines_iter, token_line.indentation + 1) {
+            let body = match get_base_expressions_with_indentation(
+                token_lines_iter,
+                token_line.indentation + 1,
+            ) {
                 Ok(body) => body,
                 Err(e) => return Err(e),
             };
@@ -846,26 +1019,26 @@ fn print_expression(expression: &BaseExpr, indentation: i32) {
             print_recursive_expression(expr);
             print!(")");
         }
-        BaseExpr::IfStatement { clause, body } => {
+        BaseExpr::IfStatement { condition, body, .. } => {
             print!("IfSt(");
-            print_recursive_expression(clause);
+            print_recursive_expression(condition);
             print!(")\n");
             for expr in body {
-                print_expression(expr, indentation+1);
+                print_expression(expr, indentation + 1);
             }
         }
-        BaseExpr::ElseIfStatement { clause, body } => {
+        BaseExpr::ElseIfStatement { condition, body, .. } => {
             print!("ElseIfSt(");
-            print_recursive_expression(clause);
+            print_recursive_expression(condition);
             print!(")");
             for expr in body {
-                print_expression(expr, indentation+1);
+                print_expression(expr, indentation + 1);
             }
         }
         BaseExpr::ElseStatement { body } => {
             print!("ElseSt(");
             for expr in body {
-                print_expression(expr, indentation+1);
+                print_expression(expr, indentation + 1);
             }
             print!(")");
         }
@@ -878,7 +1051,7 @@ fn print_expression(expression: &BaseExpr, indentation: i32) {
             print_recursive_expression(until);
             print!("\n");
             for expr in body {
-                print_expression(expr, indentation+1);
+                print_expression(expr, indentation + 1);
             }
             print!(")");
         }
@@ -896,7 +1069,7 @@ fn print_expression(expression: &BaseExpr, indentation: i32) {
             }
             print!(")\n");
             for expr in body {
-                print_expression(expr, indentation+1);
+                print_expression(expr, indentation + 1);
             }
         }
         BaseExpr::Return { return_value } => {
@@ -916,8 +1089,7 @@ fn print_recursive_expression(expression: &RecExpr) {
         RecExpr::Variable { name } => print!("Var({name:?})"),
         RecExpr::Number { number } => print!("Num({number})"),
         RecExpr::String { value } => print!("Str({value:?})"),
-        RecExpr::False => print!("False"),
-        RecExpr::True => print!("True"),
+        RecExpr::Boolean { value } => print!("Bool({value})"),
         RecExpr::Assign {
             variable_name,
             right,

@@ -1,3 +1,3 @@
 use clap::Parser;
-pub mod tokenizer;
 pub mod parser;
+pub mod tokenizer;
