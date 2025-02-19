@@ -316,6 +316,7 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
 
                             in_symbol = false;
                             in_string = true;
+                            current_symbol = String::new();
                         }
                         _ => {
                             in_symbol = true;

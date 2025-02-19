@@ -1,7 +1,7 @@
 use rosy::tokenizer;
+use tokenizer::SymbolType;
 use tokenizer::Token;
 use tokenizer::TokenLine;
-use tokenizer::SymbolType;
 
 fn compare(actual: Result<Vec<TokenLine>, String>, expected: Vec<TokenLine>) {
     match actual {
@@ -13,18 +13,20 @@ fn compare(actual: Result<Vec<TokenLine>, String>, expected: Vec<TokenLine>) {
 fn compare_linewise(actual: Result<Vec<TokenLine>, String>, expected: Vec<TokenLine>) {
     match actual {
         Ok(tokens) => {
-
             if tokens.len() != expected.len() {
-                panic!("Expected and actual have differing lengths ({} and {})", expected.len(), tokens.len());
+                panic!(
+                    "Expected and actual have differing lengths ({} and {})",
+                    expected.len(),
+                    tokens.len()
+                );
             }
-            
+
             let it = tokens.iter().zip(expected.iter());
 
             for (_, (act, exp)) in it.enumerate() {
                 assert_eq!(act, exp);
             }
-            
-        },
+        }
         Err(e) => panic!("{}", e),
     }
 }
@@ -95,7 +97,6 @@ fn variable_test() {
     compare_linewise(tokens, expected);
 }
 
-
 #[test]
 fn arithmetic_test() {
     #[rustfmt::skip]
@@ -113,7 +114,9 @@ fn arithmetic_test() {
         TokenLine {
             tokens: Vec::from([
                 Token::Number { number: 2 },
-                Token::Symbol { symbol_type: SymbolType::Plus },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
                 Token::Number { number: 3 },
             ]),
             indentation: 0,
@@ -121,9 +124,13 @@ fn arithmetic_test() {
         TokenLine {
             tokens: Vec::from([
                 Token::Number { number: 2 },
-                Token::Symbol { symbol_type: SymbolType::Plus },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
                 Token::Number { number: 3 },
-                Token::Symbol { symbol_type: SymbolType::Star },
+                Token::Symbol {
+                    symbol_type: SymbolType::Star,
+                },
                 Token::Number { number: 4 },
             ]),
             indentation: 0,
@@ -131,15 +138,25 @@ fn arithmetic_test() {
         TokenLine {
             tokens: Vec::from([
                 Token::Number { number: 23 },
-                Token::Symbol { symbol_type: SymbolType::Plus },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
                 Token::Number { number: 28 },
-                Token::Symbol { symbol_type: SymbolType::Slash },
+                Token::Symbol {
+                    symbol_type: SymbolType::Slash,
+                },
                 Token::Number { number: 15 },
-                Token::Symbol { symbol_type: SymbolType::Star },
+                Token::Symbol {
+                    symbol_type: SymbolType::Star,
+                },
                 Token::Number { number: 7 },
-                Token::Symbol { symbol_type: SymbolType::Minus },
+                Token::Symbol {
+                    symbol_type: SymbolType::Minus,
+                },
                 Token::Number { number: 13 },
-                Token::Symbol { symbol_type: SymbolType::Hat },
+                Token::Symbol {
+                    symbol_type: SymbolType::Hat,
+                },
                 Token::Number { number: 2 },
             ]),
             indentation: 0,
@@ -147,43 +164,75 @@ fn arithmetic_test() {
         TokenLine {
             tokens: Vec::from([
                 Token::Number { number: 23 },
-                Token::Symbol { symbol_type: SymbolType::Plus },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
                 Token::Number { number: 28 },
-                Token::Symbol { symbol_type: SymbolType::Slash },
+                Token::Symbol {
+                    symbol_type: SymbolType::Slash,
+                },
                 Token::Number { number: 15 },
-                Token::Symbol { symbol_type: SymbolType::Star },
+                Token::Symbol {
+                    symbol_type: SymbolType::Star,
+                },
                 Token::Number { number: 7 },
-                Token::Symbol { symbol_type: SymbolType::Minus },
+                Token::Symbol {
+                    symbol_type: SymbolType::Minus,
+                },
                 Token::Number { number: 13 },
-                Token::Symbol { symbol_type: SymbolType::Hat },
+                Token::Symbol {
+                    symbol_type: SymbolType::Hat,
+                },
                 Token::Number { number: 2 },
             ]),
             indentation: 0,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Variable { name: String::from("var") },
-                Token::Symbol { symbol_type: SymbolType::Equals },
+                Token::Variable {
+                    name: String::from("var"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Equals,
+                },
                 Token::Number { number: 15 },
             ]),
             indentation: 0,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Variable { name: String::from("var2") },
-                Token::Symbol { symbol_type: SymbolType::Equals },
-                Token::Symbol { symbol_type: SymbolType::ParenthesisOpen },
+                Token::Variable {
+                    name: String::from("var2"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Equals,
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::ParenthesisOpen,
+                },
                 Token::Number { number: 15 },
-                Token::Symbol { symbol_type: SymbolType::Plus },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
                 Token::Number { number: 16 },
-                Token::Symbol { symbol_type: SymbolType::Slash },
+                Token::Symbol {
+                    symbol_type: SymbolType::Slash,
+                },
                 Token::Number { number: 4 },
-                Token::Symbol { symbol_type: SymbolType::ParenthesisClosed },
-                Token::Symbol { symbol_type: SymbolType::Hat },
+                Token::Symbol {
+                    symbol_type: SymbolType::ParenthesisClosed,
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Hat,
+                },
                 Token::Number { number: 2 },
-                Token::Symbol { symbol_type: SymbolType::Star },
+                Token::Symbol {
+                    symbol_type: SymbolType::Star,
+                },
                 Token::Number { number: 4 },
-                Token::Symbol { symbol_type: SymbolType::Slash },
+                Token::Symbol {
+                    symbol_type: SymbolType::Slash,
+                },
                 Token::Number { number: 2 },
             ]),
             indentation: 0,
@@ -192,7 +241,6 @@ fn arithmetic_test() {
 
     compare_linewise(tokens, expected);
 }
-
 
 #[test]
 fn boolean_test() {
@@ -205,11 +253,15 @@ fn boolean_test() {
 
     let expected = Vec::from([
         TokenLine {
-            tokens: Vec::from([Token::Symbol { symbol_type: SymbolType::True }]),
+            tokens: Vec::from([Token::Symbol {
+                symbol_type: SymbolType::True,
+            }]),
             indentation: 0,
         },
         TokenLine {
-            tokens: Vec::from([Token::Symbol { symbol_type: SymbolType::False }]),
+            tokens: Vec::from([Token::Symbol {
+                symbol_type: SymbolType::False,
+            }]),
             indentation: 0,
         },
     ]);
@@ -240,79 +292,119 @@ fn if_statement_test() {
     let expected = Vec::from([
         TokenLine {
             tokens: Vec::from([
-                Token::Symbol { symbol_type: SymbolType::If },
+                Token::Symbol {
+                    symbol_type: SymbolType::If,
+                },
                 Token::Number { number: 2 },
-                Token::Symbol { symbol_type: SymbolType::Plus },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
                 Token::Number { number: 3 },
             ]),
             indentation: 0,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Variable { name: String::from("var") },
-                Token::Symbol { symbol_type: SymbolType::Equals },
+                Token::Variable {
+                    name: String::from("var"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Equals,
+                },
                 Token::Number { number: 15 },
             ]),
             indentation: 1,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Symbol { symbol_type: SymbolType::If },
+                Token::Symbol {
+                    symbol_type: SymbolType::If,
+                },
                 Token::Number { number: 2 },
-                Token::Symbol { symbol_type: SymbolType::Plus },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
                 Token::Number { number: 3 },
-                Token::Symbol { symbol_type: SymbolType::Star },
+                Token::Symbol {
+                    symbol_type: SymbolType::Star,
+                },
                 Token::Number { number: 4 },
             ]),
             indentation: 0,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Variable { name: String::from("var") },
-                Token::Symbol { symbol_type: SymbolType::Equals },
+                Token::Variable {
+                    name: String::from("var"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Equals,
+                },
                 Token::Number { number: 15 },
             ]),
             indentation: 1,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Variable { name: String::from("var2") },
-                Token::Symbol { symbol_type: SymbolType::Equals },
+                Token::Variable {
+                    name: String::from("var2"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Equals,
+                },
                 Token::Number { number: 15 },
             ]),
             indentation: 1,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Symbol { symbol_type: SymbolType::If },
+                Token::Symbol {
+                    symbol_type: SymbolType::If,
+                },
                 Token::Number { number: 2 },
-                Token::Symbol { symbol_type: SymbolType::Plus },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
                 Token::Number { number: 3 },
-                Token::Symbol { symbol_type: SymbolType::Star },
+                Token::Symbol {
+                    symbol_type: SymbolType::Star,
+                },
                 Token::Number { number: 4 },
             ]),
             indentation: 0,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Variable { name: String::from("var") },
-                Token::Symbol { symbol_type: SymbolType::Equals },
+                Token::Variable {
+                    name: String::from("var"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Equals,
+                },
                 Token::Number { number: 15 },
             ]),
             indentation: 1,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Variable { name: String::from("var2") },
-                Token::Symbol { symbol_type: SymbolType::Equals },
+                Token::Variable {
+                    name: String::from("var2"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Equals,
+                },
                 Token::Number { number: 15 },
             ]),
             indentation: 1,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Variable { name: String::from("var3") },
-                Token::Symbol { symbol_type: SymbolType::Equals },
+                Token::Variable {
+                    name: String::from("var3"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Equals,
+                },
                 Token::Number { number: 15 },
             ]),
             indentation: 1,
@@ -352,107 +444,429 @@ fn else_and_else_if_test() {
     let expected = Vec::from([
         TokenLine {
             tokens: Vec::from([
-                Token::Symbol { symbol_type: SymbolType::If },
+                Token::Symbol {
+                    symbol_type: SymbolType::If,
+                },
                 Token::Number { number: 2 },
-                Token::Symbol { symbol_type: SymbolType::Plus },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
                 Token::Number { number: 3 },
             ]),
             indentation: 0,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Variable { name: String::from("var") },
-                Token::Symbol { symbol_type: SymbolType::Equals },
+                Token::Variable {
+                    name: String::from("var"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Equals,
+                },
                 Token::Number { number: 15 },
             ]),
             indentation: 1,
         },
         TokenLine {
-            tokens: Vec::from([
-                Token::Symbol { symbol_type: SymbolType::Else },
-            ]),
+            tokens: Vec::from([Token::Symbol {
+                symbol_type: SymbolType::Else,
+            }]),
             indentation: 0,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Variable { name: String::from("var") },
-                Token::Symbol { symbol_type: SymbolType::Equals },
+                Token::Variable {
+                    name: String::from("var"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Equals,
+                },
                 Token::Number { number: 16 },
             ]),
             indentation: 1,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Symbol { symbol_type: SymbolType::If },
+                Token::Symbol {
+                    symbol_type: SymbolType::If,
+                },
                 Token::Number { number: 2 },
-                Token::Symbol { symbol_type: SymbolType::Plus },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
                 Token::Number { number: 3 },
             ]),
             indentation: 0,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Variable { name: String::from("var") },
-                Token::Symbol { symbol_type: SymbolType::Equals },
+                Token::Variable {
+                    name: String::from("var"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Equals,
+                },
                 Token::Number { number: 15 },
             ]),
             indentation: 1,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Symbol { symbol_type: SymbolType::Else },
-                Token::Symbol { symbol_type: SymbolType::If },
+                Token::Symbol {
+                    symbol_type: SymbolType::Else,
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::If,
+                },
                 Token::Number { number: 2 },
-                Token::Symbol { symbol_type: SymbolType::Plus },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
                 Token::Number { number: 3 },
-                Token::Symbol { symbol_type: SymbolType::Star },
+                Token::Symbol {
+                    symbol_type: SymbolType::Star,
+                },
                 Token::Number { number: 4 },
             ]),
             indentation: 0,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Variable { name: String::from("var") },
-                Token::Symbol { symbol_type: SymbolType::Equals },
+                Token::Variable {
+                    name: String::from("var"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Equals,
+                },
                 Token::Number { number: 17 },
             ]),
             indentation: 1,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Symbol { symbol_type: SymbolType::Else },
-                Token::Symbol { symbol_type: SymbolType::If },
+                Token::Symbol {
+                    symbol_type: SymbolType::Else,
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::If,
+                },
                 Token::Number { number: 2 },
-                Token::Symbol { symbol_type: SymbolType::Plus },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
                 Token::Number { number: 3 },
-                Token::Symbol { symbol_type: SymbolType::Star },
+                Token::Symbol {
+                    symbol_type: SymbolType::Star,
+                },
                 Token::Number { number: 4 },
             ]),
             indentation: 0,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Variable { name: String::from("var") },
-                Token::Symbol { symbol_type: SymbolType::Equals },
+                Token::Variable {
+                    name: String::from("var"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Equals,
+                },
                 Token::Number { number: 18 },
             ]),
             indentation: 1,
         },
         TokenLine {
-            tokens: Vec::from([
-                Token::Symbol { symbol_type: SymbolType::Else },
-            ]),
+            tokens: Vec::from([Token::Symbol {
+                symbol_type: SymbolType::Else,
+            }]),
             indentation: 0,
         },
         TokenLine {
             tokens: Vec::from([
-                Token::Variable { name: String::from("var") },
-                Token::Symbol { symbol_type: SymbolType::Equals },
+                Token::Variable {
+                    name: String::from("var"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Equals,
+                },
                 Token::Number { number: 19 },
             ]),
             indentation: 1,
         },
     ]);
+
+    compare(tokens, expected);
+}
+
+#[test]
+fn function_def_test() {
+    #[rustfmt::skip]
+    let program = Vec::from([
+        "fun add()",
+        "    return 0",
+        "fun add(a)",
+        "    return a",
+        "fun add(a, b)",
+        "    return a + b",
+        "fun add(a, b, c)",
+        "    return a + b + c",
+        "fun add(a, b, c, d)",
+        "    return a + b + c + d",
+    ]);
+    let tokens = tokenizer::tokenize(program);
+
+    let expected = Vec::from([
+        TokenLine {
+            tokens: Vec::from([
+                Token::Symbol {
+                    symbol_type: SymbolType::Fun,
+                },
+                Token::Variable {
+                    name: String::from("add"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::ParenthesisOpen,
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::ParenthesisClosed,
+                },
+            ]),
+            indentation: 0,
+        },
+        TokenLine {
+            tokens: Vec::from([
+                Token::Symbol {
+                    symbol_type: SymbolType::Return,
+                },
+                Token::Number { number: 0 },
+            ]),
+            indentation: 1,
+        },
+        TokenLine {
+            tokens: Vec::from([
+                Token::Symbol {
+                    symbol_type: SymbolType::Fun,
+                },
+                Token::Variable {
+                    name: String::from("add"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::ParenthesisOpen,
+                },
+                Token::Variable {
+                    name: String::from("a"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::ParenthesisClosed,
+                },
+            ]),
+            indentation: 0,
+        },
+        TokenLine {
+            tokens: Vec::from([
+                Token::Symbol {
+                    symbol_type: SymbolType::Return,
+                },
+                Token::Variable {
+                    name: String::from("a"),
+                },
+            ]),
+            indentation: 1,
+        },
+        TokenLine {
+            tokens: Vec::from([
+                Token::Symbol {
+                    symbol_type: SymbolType::Fun,
+                },
+                Token::Variable {
+                    name: String::from("add"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::ParenthesisOpen,
+                },
+                Token::Variable {
+                    name: String::from("a"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Comma,
+                },
+                Token::Variable {
+                    name: String::from("b"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::ParenthesisClosed,
+                },
+            ]),
+            indentation: 0,
+        },
+        TokenLine {
+            tokens: Vec::from([
+                Token::Symbol {
+                    symbol_type: SymbolType::Return,
+                },
+                Token::Variable {
+                    name: String::from("a"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
+                Token::Variable {
+                    name: String::from("b"),
+                },
+            ]),
+            indentation: 1,
+        },
+        TokenLine {
+            tokens: Vec::from([
+                Token::Symbol {
+                    symbol_type: SymbolType::Fun,
+                },
+                Token::Variable {
+                    name: String::from("add"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::ParenthesisOpen,
+                },
+                Token::Variable {
+                    name: String::from("a"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Comma,
+                },
+                Token::Variable {
+                    name: String::from("b"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Comma,
+                },
+                Token::Variable {
+                    name: String::from("c"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::ParenthesisClosed,
+                },
+            ]),
+            indentation: 0,
+        },
+        TokenLine {
+            tokens: Vec::from([
+                Token::Symbol {
+                    symbol_type: SymbolType::Return,
+                },
+                Token::Variable {
+                    name: String::from("a"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
+                Token::Variable {
+                    name: String::from("b"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
+                Token::Variable {
+                    name: String::from("c"),
+                },
+            ]),
+            indentation: 1,
+        },
+        TokenLine {
+            tokens: Vec::from([
+                Token::Symbol {
+                    symbol_type: SymbolType::Fun,
+                },
+                Token::Variable {
+                    name: String::from("add"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::ParenthesisOpen,
+                },
+                Token::Variable {
+                    name: String::from("a"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Comma,
+                },
+                Token::Variable {
+                    name: String::from("b"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Comma,
+                },
+                Token::Variable {
+                    name: String::from("c"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Comma,
+                },
+                Token::Variable {
+                    name: String::from("d"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::ParenthesisClosed,
+                },
+            ]),
+            indentation: 0,
+        },
+        TokenLine {
+            tokens: Vec::from([
+                Token::Symbol {
+                    symbol_type: SymbolType::Return,
+                },
+                Token::Variable {
+                    name: String::from("a"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
+                Token::Variable {
+                    name: String::from("b"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
+                Token::Variable {
+                    name: String::from("c"),
+                },
+                Token::Symbol {
+                    symbol_type: SymbolType::Plus,
+                },
+                Token::Variable {
+                    name: String::from("d"),
+                },
+            ]),
+            indentation: 1,
+        },
+    ]);
+
+    compare(tokens, expected);
+}
+
+#[test]
+fn function_calls_test() {
+    #[rustfmt::skip]
+    let program = Vec::from([
+        "a(\"hi\")",
+    ]);
+    let tokens = tokenizer::tokenize(program);
+
+    let expected = Vec::from([TokenLine {
+        tokens: Vec::from([
+            Token::Variable {
+                name: String::from("a"),
+            },
+            Token::Symbol {
+                symbol_type: SymbolType::ParenthesisOpen,
+            },
+            Token::String {
+                value: String::from("hi"),
+            },
+            Token::Symbol {
+                symbol_type: SymbolType::ParenthesisClosed,
+            },
+        ]),
+        indentation: 0,
+    }]);
 
     compare(tokens, expected);
 }

@@ -196,7 +196,8 @@ fn get_first_occurence(
         }
 
         for symbol_type in &match_on {
-            if *token == (Token::Symbol {
+            if *token
+                == (Token::Symbol {
                     symbol_type: symbol_type.clone(),
                 })
             {
@@ -383,7 +384,8 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, String> {
     let precedence_two = Vec::from([SymbolType::Star, SymbolType::Slash]);
     let precedence_three = Vec::from([SymbolType::Hat]);
     let precedence_four = Vec::from([SymbolType::EqualsEquals]);
-    let precedence_five = Vec::from([SymbolType::And, SymbolType::Or]);
+    let precedence_five = Vec::from([SymbolType::Or]);
+    let precedence_six = Vec::from([SymbolType::And]);
 
     // Looking for the first lowest precedence operators
     if let Ok((symbol_type, index)) = get_first_occurence(tokens, precedence_one) {
@@ -459,6 +461,24 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, String> {
 
     // Looking for the fifth lowest precedence operators
     if let Ok((symbol_type, index)) = get_first_occurence(tokens, precedence_five) {
+        let left = get_generic_expression(&tokens[0..index]);
+        let right = get_generic_expression(&tokens[index + 1..]);
+
+        match (left, right) {
+            (Ok(left_expr), Ok(right_expr)) => {
+                return Ok(GenExpr::BinaryOp {
+                    left_operand: Box::new(left_expr),
+                    operator: symbol_type,
+                    right_operand: Box::new(right_expr),
+                })
+            }
+            (Err(e), _) => return Err(e),
+            (_, Err(e)) => return Err(e),
+        }
+    }
+
+    // Looking for the sixth lowest precedence operators
+    if let Ok((symbol_type, index)) = get_first_occurence(tokens, precedence_six) {
         let left = get_generic_expression(&tokens[0..index]);
         let right = get_generic_expression(&tokens[index + 1..]);
 
@@ -631,21 +651,26 @@ fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token])
     }
 }
 
-fn add_to_if_statement(if_statement: &mut BaseExpr, else_statement_to_add: BaseExpr) -> Result<String, String> {
+fn add_to_if_statement(
+    if_statement: &mut BaseExpr,
+    else_statement_to_add: BaseExpr,
+) -> Result<String, String> {
     match if_statement {
         BaseExpr::IfStatement { else_statement, .. }
-        | BaseExpr::ElseIfStatement { else_statement, .. } => {
-            match else_statement {
-                Some(embedded_if_statement) => {
-                    return add_to_if_statement(embedded_if_statement, else_statement_to_add);
-                }
-                None => {
-                    *else_statement = Some(Box::new(else_statement_to_add));
-                    return Ok(String::from("OK"));
-                }
+        | BaseExpr::ElseIfStatement { else_statement, .. } => match else_statement {
+            Some(embedded_if_statement) => {
+                return add_to_if_statement(embedded_if_statement, else_statement_to_add);
             }
+            None => {
+                *else_statement = Some(Box::new(else_statement_to_add));
+                return Ok(String::from("OK"));
+            }
+        },
+        _ => {
+            return Err(String::from(
+                "Could not find if statement to add else statement to",
+            ))
         }
-        _ => return Err(String::from("Could not find if statement to add else statement to")),
     }
 }
 
@@ -656,7 +681,11 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
 
     for base_expression in base_expressions {
         match base_expression {
-            BaseExpr::IfStatement { condition, body, else_statement } => {
+            BaseExpr::IfStatement {
+                condition,
+                body,
+                else_statement,
+            } => {
                 // Recursively merge if statements in the body
                 let merged_body = match merge_if_statements(body) {
                     Ok(body) => body,
@@ -666,10 +695,12 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
                 merged_statements.push(BaseExpr::IfStatement {
                     condition: condition,
                     body: merged_body,
-                    else_statement: else_statement
+                    else_statement: else_statement,
                 });
             }
-            BaseExpr::ElseIfStatement { condition, body, .. } => {
+            BaseExpr::ElseIfStatement {
+                condition, body, ..
+            } => {
                 // Recursively merge if statements in the body
                 let merged_body = match merge_if_statements(body) {
                     Ok(body) => body,
@@ -678,17 +709,22 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
 
                 match merged_statements.last_mut() {
                     Some(upper_if_statement @ BaseExpr::IfStatement { .. }) => {
-                        match add_to_if_statement(upper_if_statement, BaseExpr::ElseIfStatement {
-                            condition,
-                            body: merged_body,
-                            else_statement: None,
-                        }) {
+                        match add_to_if_statement(
+                            upper_if_statement,
+                            BaseExpr::ElseIfStatement {
+                                condition,
+                                body: merged_body,
+                                else_statement: None,
+                            },
+                        ) {
                             Ok(_) => {}
                             Err(e) => return Err(e),
                         }
                     }
                     _ => {
-                        return Err(String::from("Found no if statement to attach else if statement to"));
+                        return Err(String::from(
+                            "Found no if statement to attach else if statement to",
+                        ));
                     }
                 }
             }
@@ -701,19 +737,26 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
 
                 match merged_statements.last_mut() {
                     Some(upper_if_statement @ BaseExpr::IfStatement { .. }) => {
-                        match add_to_if_statement(upper_if_statement, BaseExpr::ElseStatement {
-                            body: merged_body,
-                        }) {
+                        match add_to_if_statement(
+                            upper_if_statement,
+                            BaseExpr::ElseStatement { body: merged_body },
+                        ) {
                             Ok(_) => {}
                             Err(e) => return Err(e),
                         }
                     }
                     _ => {
-                        return Err(String::from("Found no if statement to attach else statement to"));
+                        return Err(String::from(
+                            "Found no if statement to attach else statement to",
+                        ));
                     }
                 }
             }
-            BaseExpr::ForLoop { var_name, until, body } => {
+            BaseExpr::ForLoop {
+                var_name,
+                until,
+                body,
+            } => {
                 // Recursively merge if statements in the body
                 let merged_body = match merge_if_statements(body) {
                     Ok(body) => body,
@@ -726,7 +769,11 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
                     body: merged_body,
                 });
             }
-            BaseExpr::FunctionDefinition { fun_name, args, body } => {
+            BaseExpr::FunctionDefinition {
+                fun_name,
+                args,
+                body,
+            } => {
                 // Recursively merge if statements in the body
                 let merged_body = match merge_if_statements(body) {
                     Ok(body) => body,
@@ -825,7 +872,11 @@ fn get_base_expression(
                 Err(e) => return Err(e),
             };
 
-            return Ok(BaseExpr::IfStatement { condition, body, else_statement: None });
+            return Ok(BaseExpr::IfStatement {
+                condition,
+                body,
+                else_statement: None,
+            });
         }
         [Token::Symbol {
             symbol_type: SymbolType::Else,
@@ -845,7 +896,11 @@ fn get_base_expression(
                 Err(e) => return Err(e),
             };
 
-            return Ok(BaseExpr::ElseIfStatement { condition, body, else_statement: None });
+            return Ok(BaseExpr::ElseIfStatement {
+                condition,
+                body,
+                else_statement: None,
+            });
         }
         [Token::Symbol {
             symbol_type: SymbolType::Else,
@@ -1019,7 +1074,9 @@ fn print_expression(expression: &BaseExpr, indentation: i32) {
             print_recursive_expression(expr);
             print!(")");
         }
-        BaseExpr::IfStatement { condition, body, .. } => {
+        BaseExpr::IfStatement {
+            condition, body, ..
+        } => {
             print!("IfSt(");
             print_recursive_expression(condition);
             print!(")\n");
@@ -1027,7 +1084,9 @@ fn print_expression(expression: &BaseExpr, indentation: i32) {
                 print_expression(expr, indentation + 1);
             }
         }
-        BaseExpr::ElseIfStatement { condition, body, .. } => {
+        BaseExpr::ElseIfStatement {
+            condition, body, ..
+        } => {
             print!("ElseIfSt(");
             print_recursive_expression(condition);
             print!(")");

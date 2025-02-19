@@ -10,18 +10,20 @@ fn compare(actual: Result<Vec<BaseExpr>, String>, expected: Vec<BaseExpr>) {
 fn compare_linewise(actual: Result<Vec<BaseExpr>, String>, expected: Vec<BaseExpr>) {
     match actual {
         Ok(tokens) => {
-
             if tokens.len() != expected.len() {
-                panic!("Expected and actual have differing lengths ({} and {})", expected.len(), tokens.len());
+                panic!(
+                    "Expected and actual have differing lengths ({} and {})",
+                    expected.len(),
+                    tokens.len()
+                );
             }
-            
+
             let it = tokens.iter().zip(expected.iter());
 
             for (_, (act, exp)) in it.enumerate() {
                 assert_eq!(act, exp);
             }
-            
-        },
+        }
         Err(e) => panic!("{}", e),
     }
 }
@@ -272,10 +274,8 @@ fn variable_assignment_test() {
     compare_linewise(expressions, expected);
 }
 
-
 #[test]
 fn if_statements_test_small() {
-    // do all if statement combinations and also recursive if statements
     #[rustfmt::skip]
     let program = Vec::from([
         "if true",
@@ -295,28 +295,24 @@ fn if_statements_test_small() {
             body: Vec::from([BaseExpr::Simple {
                 expr: parser::RecExpr::Number { number: 1 },
             }]),
-            else_statement: None
+            else_statement: None,
         },
         BaseExpr::IfStatement {
             condition: parser::RecExpr::Boolean { value: false },
             body: Vec::from([BaseExpr::Simple {
                 expr: parser::RecExpr::Number { number: 2 },
             }]),
-            else_statement: Some(Box::new(
-                BaseExpr::ElseIfStatement {
+            else_statement: Some(Box::new(BaseExpr::ElseIfStatement {
+                condition: parser::RecExpr::Boolean { value: true },
+                body: Vec::from([BaseExpr::IfStatement {
                     condition: parser::RecExpr::Boolean { value: true },
-                    body: Vec::from([
-                        BaseExpr::IfStatement {
-                            condition: parser::RecExpr::Boolean { value: true },
-                            body: Vec::from([BaseExpr::Simple {
-                                expr: parser::RecExpr::Number { number: 3 },
-                            }]),
-                            else_statement: None
-                        }
-                    ]),
-                    else_statement: None
-                }
-            ))
+                    body: Vec::from([BaseExpr::Simple {
+                        expr: parser::RecExpr::Number { number: 3 },
+                    }]),
+                    else_statement: None,
+                }]),
+                else_statement: None,
+            })),
         },
     ]);
 
@@ -325,7 +321,6 @@ fn if_statements_test_small() {
 
 #[test]
 fn if_statements_test() {
-    // do all if statement combinations and also recursive if statements
     #[rustfmt::skip]
     let program = Vec::from([
         "if true",
@@ -358,28 +353,24 @@ fn if_statements_test() {
             body: Vec::from([BaseExpr::Simple {
                 expr: parser::RecExpr::Number { number: 1 },
             }]),
-            else_statement: None
+            else_statement: None,
         },
         BaseExpr::IfStatement {
             condition: parser::RecExpr::Boolean { value: false },
             body: Vec::from([BaseExpr::Simple {
                 expr: parser::RecExpr::Number { number: 2 },
             }]),
-            else_statement: Some(Box::new(
-                BaseExpr::ElseIfStatement {
+            else_statement: Some(Box::new(BaseExpr::ElseIfStatement {
+                condition: parser::RecExpr::Boolean { value: true },
+                body: Vec::from([BaseExpr::IfStatement {
                     condition: parser::RecExpr::Boolean { value: true },
-                    body: Vec::from([
-                        BaseExpr::IfStatement {
-                            condition: parser::RecExpr::Boolean { value: true },
-                            body: Vec::from([BaseExpr::Simple {
-                                expr: parser::RecExpr::Number { number: 3 },
-                            }]),
-                            else_statement: None
-                        }
-                    ]),
-                    else_statement: None
-                }
-            ))
+                    body: Vec::from([BaseExpr::Simple {
+                        expr: parser::RecExpr::Number { number: 3 },
+                    }]),
+                    else_statement: None,
+                }]),
+                else_statement: None,
+            })),
         },
         BaseExpr::IfStatement {
             condition: parser::RecExpr::Boolean { value: true },
@@ -389,48 +380,452 @@ fn if_statements_test() {
                     body: Vec::from([BaseExpr::Simple {
                         expr: parser::RecExpr::Number { number: 4 },
                     }]),
-                    else_statement: None
+                    else_statement: None,
                 },
                 BaseExpr::Simple {
                     expr: parser::RecExpr::Number { number: 5 },
-                }
+                },
             ]),
-            else_statement: Some(Box::new(
-                BaseExpr::ElseIfStatement {
-                    condition: parser::RecExpr::Boolean { value: false },
+            else_statement: Some(Box::new(BaseExpr::ElseIfStatement {
+                condition: parser::RecExpr::Boolean { value: false },
+                body: Vec::from([
+                    BaseExpr::IfStatement {
+                        condition: parser::RecExpr::Boolean { value: true },
+                        body: Vec::from([BaseExpr::Simple {
+                            expr: parser::RecExpr::Number { number: 6 },
+                        }]),
+                        else_statement: None,
+                    },
+                    BaseExpr::Simple {
+                        expr: parser::RecExpr::Number { number: 7 },
+                    },
+                ]),
+                else_statement: Some(Box::new(BaseExpr::ElseStatement {
                     body: Vec::from([
+                        BaseExpr::Simple {
+                            expr: parser::RecExpr::Number { number: 8 },
+                        },
                         BaseExpr::IfStatement {
-                            condition: parser::RecExpr::Boolean { value: true },
+                            condition: parser::RecExpr::Boolean { value: false },
                             body: Vec::from([BaseExpr::Simple {
-                                expr: parser::RecExpr::Number { number: 6 },
+                                expr: parser::RecExpr::Number { number: 9 },
                             }]),
-                            else_statement: None
+                            else_statement: None,
                         },
                         BaseExpr::Simple {
-                            expr: parser::RecExpr::Number { number: 7 },
-                        }
+                            expr: parser::RecExpr::Number { number: 10 },
+                        },
                     ]),
-                    else_statement: Some(Box::new(
-                        BaseExpr::ElseStatement {
-                            body: Vec::from([
-                                BaseExpr::Simple {
-                                    expr: parser::RecExpr::Number { number: 8 },
+                })),
+            })),
+        },
+    ]);
+
+    compare(expressions, expected);
+}
+
+#[test]
+fn boolean_expressions_test() {
+    #[rustfmt::skip]
+    let program = Vec::from([
+        "true and false",
+        "true and true",
+        "true or false",
+        "false or false",
+        "(a == b) and true",
+        "(a == b) and true or (false == (5 == 5))",
+        "var = 5 == 6 == 7",
+        "var = (5 == 6) == 7",
+    ]);
+    let expressions = parser::parse_strings(program);
+    let expected = Vec::from([
+        BaseExpr::Simple {
+            expr: parser::RecExpr::And {
+                left: Box::new(parser::RecExpr::Boolean { value: true }),
+                right: Box::new(parser::RecExpr::Boolean { value: false }),
+            },
+        },
+        BaseExpr::Simple {
+            expr: parser::RecExpr::And {
+                left: Box::new(parser::RecExpr::Boolean { value: true }),
+                right: Box::new(parser::RecExpr::Boolean { value: true }),
+            },
+        },
+        BaseExpr::Simple {
+            expr: parser::RecExpr::Or {
+                left: Box::new(parser::RecExpr::Boolean { value: true }),
+                right: Box::new(parser::RecExpr::Boolean { value: false }),
+            },
+        },
+        BaseExpr::Simple {
+            expr: parser::RecExpr::Or {
+                left: Box::new(parser::RecExpr::Boolean { value: false }),
+                right: Box::new(parser::RecExpr::Boolean { value: false }),
+            },
+        },
+        BaseExpr::Simple {
+            expr: parser::RecExpr::And {
+                left: Box::new(parser::RecExpr::Equals {
+                    left: Box::new(parser::RecExpr::Variable {
+                        name: String::from("a"),
+                    }),
+                    right: Box::new(parser::RecExpr::Variable {
+                        name: String::from("b"),
+                    }),
+                }),
+                right: Box::new(parser::RecExpr::Boolean { value: true }),
+            },
+        },
+        BaseExpr::Simple {
+            expr: parser::RecExpr::Or {
+                left: Box::new(parser::RecExpr::And {
+                    left: Box::new(parser::RecExpr::Equals {
+                        left: Box::new(parser::RecExpr::Variable {
+                            name: String::from("a"),
+                        }),
+                        right: Box::new(parser::RecExpr::Variable {
+                            name: String::from("b"),
+                        }),
+                    }),
+                    right: Box::new(parser::RecExpr::Boolean { value: true }),
+                }),
+                right: Box::new(parser::RecExpr::Equals {
+                    left: Box::new(parser::RecExpr::Boolean { value: false }),
+                    right: Box::new(parser::RecExpr::Equals {
+                        left: Box::new(parser::RecExpr::Number { number: 5 }),
+                        right: Box::new(parser::RecExpr::Number { number: 5 }),
+                    }),
+                }),
+            },
+        },
+        BaseExpr::VariableAssignment {
+            var_name: String::from("var"),
+            expr: parser::RecExpr::Equals {
+                left: Box::new(parser::RecExpr::Number { number: 5 }),
+                right: Box::new(parser::RecExpr::Equals {
+                    left: Box::new(parser::RecExpr::Number { number: 6 }),
+                    right: Box::new(parser::RecExpr::Number { number: 7 }),
+                }),
+            },
+        },
+        BaseExpr::VariableAssignment {
+            var_name: String::from("var"),
+            expr: parser::RecExpr::Equals {
+                left: Box::new(parser::RecExpr::Equals {
+                    left: Box::new(parser::RecExpr::Number { number: 5 }),
+                    right: Box::new(parser::RecExpr::Number { number: 6 }),
+                }),
+                right: Box::new(parser::RecExpr::Number { number: 7 }),
+            },
+        },
+    ]);
+
+    compare_linewise(expressions, expected);
+}
+
+#[test]
+fn function_def_test() {
+    #[rustfmt::skip]
+    let program = Vec::from([
+        "fun blab()",
+        "    1",
+        "    2",
+        "fun blab2_3(a)",
+        "    1",
+        "    2",
+        "fun blab2_3(a, b, c)",
+        "    1",
+        "    2",
+        "fun blab2_3(alpha, beta2, beta2)",
+        "    1",
+        "    2",
+    ]);
+    let expressions = parser::parse_strings(program);
+    let expected = Vec::from([
+        BaseExpr::FunctionDefinition {
+            fun_name: String::from("blab"),
+            args: Vec::new(),
+            body: Vec::from([
+                BaseExpr::Simple {
+                    expr: parser::RecExpr::Number { number: 1 },
+                },
+                BaseExpr::Simple {
+                    expr: parser::RecExpr::Number { number: 2 },
+                },
+            ]),
+        },
+        BaseExpr::FunctionDefinition {
+            fun_name: String::from("blab2_3"),
+            args: Vec::from([String::from("a")]),
+            body: Vec::from([
+                BaseExpr::Simple {
+                    expr: parser::RecExpr::Number { number: 1 },
+                },
+                BaseExpr::Simple {
+                    expr: parser::RecExpr::Number { number: 2 },
+                },
+            ]),
+        },
+        BaseExpr::FunctionDefinition {
+            fun_name: String::from("blab2_3"),
+            args: Vec::from([String::from("a"), String::from("b"), String::from("c")]),
+            body: Vec::from([
+                BaseExpr::Simple {
+                    expr: parser::RecExpr::Number { number: 1 },
+                },
+                BaseExpr::Simple {
+                    expr: parser::RecExpr::Number { number: 2 },
+                },
+            ]),
+        },
+        BaseExpr::FunctionDefinition {
+            fun_name: String::from("blab2_3"),
+            args: Vec::from([
+                String::from("alpha"),
+                String::from("beta2"),
+                String::from("beta2"),
+            ]),
+            body: Vec::from([
+                BaseExpr::Simple {
+                    expr: parser::RecExpr::Number { number: 1 },
+                },
+                BaseExpr::Simple {
+                    expr: parser::RecExpr::Number { number: 2 },
+                },
+            ]),
+        },
+    ]);
+
+    compare(expressions, expected);
+}
+
+#[test]
+fn return_test() {
+    #[rustfmt::skip]
+    let program = Vec::from([
+        "fun blab()",
+        "    1",
+        "    return",
+        "fun blab2_3(a)",
+        "    1",
+        "    return 100",
+        "fun blab2_3(a, b, c)",
+        "    return a + b",
+        "    2",
+    ]);
+    let expressions = parser::parse_strings(program);
+    let expected = Vec::from([
+        BaseExpr::FunctionDefinition {
+            fun_name: String::from("blab"),
+            args: Vec::new(),
+            body: Vec::from([
+                BaseExpr::Simple {
+                    expr: parser::RecExpr::Number { number: 1 },
+                },
+                BaseExpr::Return { return_value: None },
+            ]),
+        },
+        BaseExpr::FunctionDefinition {
+            fun_name: String::from("blab2_3"),
+            args: Vec::from([String::from("a")]),
+            body: Vec::from([
+                BaseExpr::Simple {
+                    expr: parser::RecExpr::Number { number: 1 },
+                },
+                BaseExpr::Return {
+                    return_value: Some(parser::RecExpr::Number { number: 100 }),
+                },
+            ]),
+        },
+        BaseExpr::FunctionDefinition {
+            fun_name: String::from("blab2_3"),
+            args: Vec::from([String::from("a"), String::from("b"), String::from("c")]),
+            body: Vec::from([
+                BaseExpr::Return {
+                    return_value: Some(parser::RecExpr::Add {
+                        left: Box::new(parser::RecExpr::Variable {
+                            name: String::from("a"),
+                        }),
+                        right: Box::new(parser::RecExpr::Variable {
+                            name: String::from("b"),
+                        }),
+                    }),
+                },
+                BaseExpr::Simple {
+                    expr: parser::RecExpr::Number { number: 2 },
+                },
+            ]),
+        },
+    ]);
+
+    compare(expressions, expected);
+}
+
+#[test]
+fn break_test() {
+    #[rustfmt::skip]
+    let program = Vec::from([
+        "for i in 6",
+        "    1",
+        "    break",
+        "for i in 17",
+        "    if i == 5",
+        "        break",
+    ]);
+    let expressions = parser::parse_strings(program);
+    let expected = Vec::from([
+        BaseExpr::ForLoop {
+            var_name: String::from("i"),
+            until: parser::RecExpr::Number { number: 6 },
+            body: Vec::from([
+                BaseExpr::Simple {
+                    expr: parser::RecExpr::Number { number: 1 },
+                },
+                BaseExpr::Break,
+            ]),
+        },
+        BaseExpr::ForLoop {
+            var_name: String::from("i"),
+            until: parser::RecExpr::Number { number: 17 },
+            body: Vec::from([BaseExpr::IfStatement {
+                condition: parser::RecExpr::Equals {
+                    left: Box::new(parser::RecExpr::Variable {
+                        name: String::from("i"),
+                    }),
+                    right: Box::new(parser::RecExpr::Number { number: 5 }),
+                },
+                body: Vec::from([BaseExpr::Break]),
+                else_statement: None,
+            }]),
+        },
+    ]);
+
+    compare(expressions, expected);
+}
+
+#[test]
+fn function_calls_test() {
+    #[rustfmt::skip]
+    let program = Vec::from([
+        "a()",
+        "b = c()",
+        "beta = ceta()",
+        "beta = ceta(1)",
+        "beta = ceta(\"hi there\")",
+        "beta = ceta(1, 2, 3)",
+        "beta = ceta(alpha(), beta() + beta(), beta(beta(beta(), beta())))",
+    ]);
+    let expressions = parser::parse_strings(program);
+    let expected = Vec::from([
+        BaseExpr::Simple {
+            expr: parser::RecExpr::FunctionCall {
+                function_name: String::from("a"),
+                args: Vec::new(),
+            },
+        },
+        BaseExpr::VariableAssignment {
+            var_name: String::from("b"),
+            expr: parser::RecExpr::FunctionCall {
+                function_name: String::from("c"),
+                args: Vec::new(),
+            },
+        },
+        BaseExpr::VariableAssignment {
+            var_name: String::from("beta"),
+            expr: parser::RecExpr::FunctionCall {
+                function_name: String::from("ceta"),
+                args: Vec::new(),
+            },
+        },
+        BaseExpr::VariableAssignment {
+            var_name: String::from("beta"),
+            expr: parser::RecExpr::FunctionCall {
+                function_name: String::from("ceta"),
+                args: Vec::from([parser::RecExpr::Number { number: 1 }]),
+            },
+        },
+        BaseExpr::VariableAssignment {
+            var_name: String::from("beta"),
+            expr: parser::RecExpr::FunctionCall {
+                function_name: String::from("ceta"),
+                args: Vec::from([parser::RecExpr::String {
+                    value: String::from("hi there"),
+                }]),
+            },
+        },
+        BaseExpr::VariableAssignment {
+            var_name: String::from("beta"),
+            expr: parser::RecExpr::FunctionCall {
+                function_name: String::from("ceta"),
+                args: Vec::from([
+                    parser::RecExpr::Number { number: 1 },
+                    parser::RecExpr::Number { number: 2 },
+                    parser::RecExpr::Number { number: 3 },
+                ]),
+            },
+        },
+        BaseExpr::VariableAssignment {
+            var_name: String::from("beta"),
+            expr: parser::RecExpr::FunctionCall {
+                function_name: String::from("ceta"),
+                args: Vec::from([
+                    parser::RecExpr::FunctionCall {
+                        function_name: String::from("alpha"),
+                        args: Vec::new(),
+                    },
+                    parser::RecExpr::Add {
+                        left: Box::new(parser::RecExpr::FunctionCall {
+                            function_name: String::from("beta"),
+                            args: Vec::new(),
+                        }),
+                        right: Box::new(parser::RecExpr::FunctionCall {
+                            function_name: String::from("beta"),
+                            args: Vec::new(),
+                        }),
+                    },
+                    parser::RecExpr::FunctionCall {
+                        function_name: String::from("beta"),
+                        args: Vec::from([parser::RecExpr::FunctionCall {
+                            function_name: String::from("beta"),
+                            args: Vec::from([
+                                parser::RecExpr::FunctionCall {
+                                    function_name: String::from("beta"),
+                                    args: Vec::new(),
                                 },
-                                BaseExpr::IfStatement {
-                                    condition: parser::RecExpr::Boolean { value: false },
-                                    body: Vec::from([BaseExpr::Simple {
-                                        expr: parser::RecExpr::Number { number: 9 },
-                                    }]),
-                                    else_statement: None
+                                parser::RecExpr::FunctionCall {
+                                    function_name: String::from("beta"),
+                                    args: Vec::new(),
                                 },
-                                BaseExpr::Simple {
-                                    expr: parser::RecExpr::Number { number: 10 },
-                                }
-                            ])
-                        }
-                    ))
-                }
-            ))
+                            ]),
+                        }]),
+                    },
+                ]),
+            },
+        },
+    ]);
+
+    compare(expressions, expected);
+}
+
+#[test]
+fn plus_equals_test() {
+    #[rustfmt::skip]
+    let program = Vec::from([
+        "a += 2",
+        "a += 3 + 4",
+    ]);
+    let expressions = parser::parse_strings(program);
+    let expected = Vec::from([
+        BaseExpr::PlusEqualsStatement {
+            var_name: String::from("a"),
+            expr: parser::RecExpr::Number { number: 2 },
+        },
+        BaseExpr::PlusEqualsStatement {
+            var_name: String::from("a"),
+            expr: parser::RecExpr::Add {
+                left: Box::new(parser::RecExpr::Number { number: 3 }),
+                right: Box::new(parser::RecExpr::Number { number: 4 }),
+            },
         },
     ]);
 
