@@ -4,7 +4,7 @@ use crate::tokenizer::Token;
 use crate::tokenizer::TokenLine;
 use std::f32::consts::{E, PI};
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum BaseExpr {
     Simple {
         expr: RecExpr,
