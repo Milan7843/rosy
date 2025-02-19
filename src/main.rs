@@ -1,7 +1,7 @@
 use clap::Parser;
+use rosy::interpreter;
 use rosy::parser;
 use rosy::tokenizer;
-use rosy::interpreter;
 
 // Language features:
 /*
