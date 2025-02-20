@@ -46,7 +46,7 @@ pub enum BaseExpr {
     Break,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum RecExpr {
     Variable {
         name: String,

@@ -1,1 +1,2 @@
-a("str")
+a = 5 + 3
+return a
