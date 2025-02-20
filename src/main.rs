@@ -2,6 +2,7 @@ use clap::Parser;
 use rosy::interpreter;
 use rosy::parser;
 use rosy::tokenizer;
+use rosy::pipeline;
 
 // Language features:
 /*
@@ -64,24 +65,8 @@ pub fn main() {
 
     println!("path: {:?}", args.path);
 
-    match run_pipeline(&args.path) {
-        Ok(message) => println!("{message}"),
+    match pipeline::run_pipeline_from_path(&args.path) {
+        Ok(terminal) => {},
         Err(err) => println!("{err}"),
     }
-}
-
-pub fn run_pipeline(path: &std::path::PathBuf) -> Result<String, String> {
-    let base_expressions = match parser::parse(path) {
-        Ok(base_expressions) => base_expressions,
-        Err(error_message) => return Err(error_message),
-    };
-
-    parser::print_expressions(&base_expressions);
-
-    let output_terminal = match interpreter::interpret(base_expressions) {
-        Ok(output_terminal) => output_terminal,
-        Err(error_message) => return Err(error_message),
-    };
-
-    return Ok(String::from("All went well"));
 }

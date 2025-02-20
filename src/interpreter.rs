@@ -83,6 +83,8 @@ pub fn interpret(base_expressions: Vec<BaseExpr>) -> Result<Terminal, String> {
 
     let mut terminal: Terminal = Vec::new();
 
+    terminal.push(String::new());
+
     for base_expression in base_expressions {
         match interpret_base_expr(base_expression, &mut env, &mut terminal) {
             Ok(_) => {}
@@ -720,15 +722,23 @@ fn interpret_expr(
                     return Ok(None);
                 }
                 Value::StandardFunction(StandardFunction::Print) => {
+                    let last_terminal_line: &mut String = terminal.last_mut().unwrap();
                     for arg in arg_values {
-                        print!("{}", value_to_string(&arg));
+                        let value_string = value_to_string(&arg);
+                        print!("{}", value_string);
+                        last_terminal_line.push_str(&value_string);
                     }
+
                     return Ok(None);
                 }
                 Value::StandardFunction(StandardFunction::PrintLine) => {
+                    let last_terminal_line = terminal.last_mut().unwrap();
                     for arg in arg_values {
-                        print!("{}", value_to_string(&arg));
+                        let value_string = value_to_string(&arg);
+                        print!("{}", value_string);
+                        last_terminal_line.push_str(&value_string);
                     }
+                    terminal.push(String::new());
                     println!();
                     return Ok(None);
                 }
