@@ -5,6 +5,26 @@ use crate::parser::BaseExpr;
 use crate::parser::RecExpr;
 
 #[derive(Clone)]
+enum StandardFunction {
+    Print,
+    PrintLine,
+}
+
+fn add_default_functions_to_env(env: &mut Environment) {
+    let scope = env.last_mut().unwrap();
+
+    scope.push(Binding {
+        name: String::from("print"),
+        value: Value::StandardFunction(StandardFunction::Print),
+    });
+
+    scope.push(Binding {
+        name: String::from("println"),
+        value: Value::StandardFunction(StandardFunction::PrintLine),
+    });
+}
+
+#[derive(Clone)]
 enum Value {
     Number(i32),
     Bool(bool),
@@ -14,6 +34,7 @@ enum Value {
         args: Vec<String>,
         body: Vec<BaseExpr>,
     },
+    StandardFunction(StandardFunction),
 }
 
 fn value_to_string(value: &Value) -> String {
@@ -21,7 +42,8 @@ fn value_to_string(value: &Value) -> String {
         Value::Number(value) => return format!("{value}"),
         Value::Bool(value) => return format!("{value}"),
         Value::String(value) => return format!("{value}"),
-        Value::Function { .. } => return String::from("function"),
+        Value::Function { name, .. } => return format!("function {}", name),
+        Value::StandardFunction(_) => return String::from("standard function"),
     }
 }
 
@@ -31,6 +53,7 @@ fn value_type_to_string(value: &Value) -> String {
         Value::Bool(_) => return String::from("boolean"),
         Value::String(_) => return String::from("string"),
         Value::Function { .. } => return String::from("function"),
+        Value::StandardFunction(_) => return String::from("standard function"),
     }
 }
 
@@ -43,44 +66,45 @@ type Scope = Vec<Binding>;
 
 type Environment = Vec<Scope>;
 
+pub type Terminal = Vec<String>;
+
 enum InterpretationResult {
     Return { value: Option<Value> },
     Break,
     Empty,
 }
 
-pub fn interpret(base_expressions: Vec<BaseExpr>) -> Result<String, String> {
+pub fn interpret(base_expressions: Vec<BaseExpr>) -> Result<Terminal, String> {
     let mut env: Environment = Vec::new();
 
     env.push(Vec::new());
 
+    add_default_functions_to_env(&mut env);
+
+    let mut terminal: Terminal = Vec::new();
+
     for base_expression in base_expressions {
-        match interpret_base_expr(base_expression, &mut env) {
-            Ok(InterpretationResult::Return { value }) => {
-                match value {
-                    Some(value) => print!("{}", value_to_string(&value)),
-                    None => {}
-                };
-            }
+        match interpret_base_expr(base_expression, &mut env, &mut terminal) {
             Ok(_) => {}
             Err(e) => return Err(e),
         }
     }
 
-    return Ok(String::from("Interpretation successful"));
+    return Ok(terminal);
 }
 
 fn interpret_base_expr(
     base_expression: BaseExpr,
     env: &mut Environment,
+    terminal: &mut Terminal,
 ) -> Result<InterpretationResult, String> {
     match base_expression {
-        BaseExpr::Simple { expr } => {
-            interpret_expr(expr, env);
-            return Ok(InterpretationResult::Empty);
-        }
+        BaseExpr::Simple { expr } => match interpret_expr(expr, env, terminal) {
+            Ok(_) => return Ok(InterpretationResult::Empty),
+            Err(e) => return Err(e),
+        },
         BaseExpr::VariableAssignment { var_name, expr } => {
-            let value = match interpret_expr(expr, env) {
+            let value = match interpret_expr(expr, env, terminal) {
                 Ok(right) => match right {
                     Some(value) => value,
                     None => return Err(String::from("Cannot assign to empty")),
@@ -101,7 +125,7 @@ fn interpret_base_expr(
             body,
             else_statement,
         } => {
-            let condition = match interpret_expr(condition, env) {
+            let condition = match interpret_expr(condition, env, terminal) {
                 Ok(Some(Value::Bool(condition))) => condition,
                 Ok(Some(other_value)) => {
                     return Err(format!(
@@ -124,11 +148,11 @@ fn interpret_base_expr(
                     None => return Ok(InterpretationResult::Empty),
                 };
 
-                return interpret_base_expr(else_statement_real, env);
+                return interpret_base_expr(else_statement_real, env, terminal);
             }
 
             for base_expression in body {
-                let interp_result = match interpret_base_expr(base_expression, env) {
+                let interp_result = match interpret_base_expr(base_expression, env, terminal) {
                     Ok(result) => result,
                     Err(e) => return Err(e),
                 };
@@ -155,7 +179,7 @@ fn interpret_base_expr(
             body,
             else_statement,
         } => {
-            let condition = match interpret_expr(condition, env) {
+            let condition = match interpret_expr(condition, env, terminal) {
                 Ok(Some(Value::Bool(condition))) => condition,
                 Ok(Some(other_value)) => {
                     return Err(format!(
@@ -178,11 +202,11 @@ fn interpret_base_expr(
                     None => return Ok(InterpretationResult::Empty),
                 };
 
-                return interpret_base_expr(else_statement_real, env);
+                return interpret_base_expr(else_statement_real, env, terminal);
             }
 
             for base_expression in body {
-                let interp_result = match interpret_base_expr(base_expression, env) {
+                let interp_result = match interpret_base_expr(base_expression, env, terminal) {
                     Ok(result) => result,
                     Err(e) => return Err(e),
                 };
@@ -206,7 +230,7 @@ fn interpret_base_expr(
         }
         BaseExpr::ElseStatement { body } => {
             for base_expression in body {
-                let interp_result = match interpret_base_expr(base_expression, env) {
+                let interp_result = match interpret_base_expr(base_expression, env, terminal) {
                     Ok(result) => result,
                     Err(e) => return Err(e),
                 };
@@ -229,7 +253,7 @@ fn interpret_base_expr(
             return Ok(InterpretationResult::Empty);
         }
         BaseExpr::PlusEqualsStatement { var_name, expr } => {
-            let value = match interpret_expr(expr, env) {
+            let value = match interpret_expr(expr, env, terminal) {
                 Ok(right) => match right {
                     Some(value) => value,
                     None => return Err(String::from("Cannot assign to empty")),
@@ -287,7 +311,7 @@ fn interpret_base_expr(
                 None => return Ok(InterpretationResult::Return { value: None }),
             };
 
-            let return_value = match interpret_expr(return_value, env) {
+            let return_value = match interpret_expr(return_value, env, terminal) {
                 Ok(Some(value)) => value,
                 Ok(None) => return Ok(InterpretationResult::Return { value: None }),
                 Err(e) => return Err(e),
@@ -307,7 +331,7 @@ fn interpret_base_expr(
             until,
             body,
         } => {
-            let until = match interpret_expr(until, env) {
+            let until = match interpret_expr(until, env, terminal) {
                 Ok(Some(Value::Number(until))) => until,
                 Ok(Some(other_value)) => {
                     return Err(format!(
@@ -384,7 +408,11 @@ fn add(left: &Option<Value>, right: &Option<Value>) -> Result<Option<Value>, Str
     }
 }
 
-fn interpret_expr(expr: RecExpr, env: &mut Environment) -> Result<Option<Value>, String> {
+fn interpret_expr(
+    expr: RecExpr,
+    env: &mut Environment,
+    terminal: &mut Terminal,
+) -> Result<Option<Value>, String> {
     match expr {
         RecExpr::Variable { name } => match find_in_env(&name, env) {
             Some(value) => return Ok(Some(value)),
@@ -396,11 +424,11 @@ fn interpret_expr(expr: RecExpr, env: &mut Environment) -> Result<Option<Value>,
 
         // Arithmetic
         RecExpr::Add { left, right } => {
-            let left_value = match interpret_expr(*left, env) {
+            let left_value = match interpret_expr(*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env) {
+            let right_value = match interpret_expr(*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -408,11 +436,11 @@ fn interpret_expr(expr: RecExpr, env: &mut Environment) -> Result<Option<Value>,
             return add(&left_value, &right_value);
         }
         RecExpr::Subtract { left, right } => {
-            let left_value = match interpret_expr(*left, env) {
+            let left_value = match interpret_expr(*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env) {
+            let right_value = match interpret_expr(*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -433,11 +461,11 @@ fn interpret_expr(expr: RecExpr, env: &mut Environment) -> Result<Option<Value>,
             }
         }
         RecExpr::Multiply { left, right } => {
-            let left_value = match interpret_expr(*left, env) {
+            let left_value = match interpret_expr(*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env) {
+            let right_value = match interpret_expr(*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -458,11 +486,11 @@ fn interpret_expr(expr: RecExpr, env: &mut Environment) -> Result<Option<Value>,
             }
         }
         RecExpr::Divide { left, right } => {
-            let left_value = match interpret_expr(*left, env) {
+            let left_value = match interpret_expr(*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env) {
+            let right_value = match interpret_expr(*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -483,11 +511,11 @@ fn interpret_expr(expr: RecExpr, env: &mut Environment) -> Result<Option<Value>,
             }
         }
         RecExpr::Power { left, right } => {
-            let left_value = match interpret_expr(*left, env) {
+            let left_value = match interpret_expr(*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env) {
+            let right_value = match interpret_expr(*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -512,7 +540,7 @@ fn interpret_expr(expr: RecExpr, env: &mut Environment) -> Result<Option<Value>,
             }
         }
         RecExpr::Minus { right } => {
-            let right_value = match interpret_expr(*right, env) {
+            let right_value = match interpret_expr(*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -533,11 +561,11 @@ fn interpret_expr(expr: RecExpr, env: &mut Environment) -> Result<Option<Value>,
         }
 
         RecExpr::Equals { left, right } => {
-            let left_value = match interpret_expr(*left, env) {
+            let left_value = match interpret_expr(*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env) {
+            let right_value = match interpret_expr(*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -568,11 +596,11 @@ fn interpret_expr(expr: RecExpr, env: &mut Environment) -> Result<Option<Value>,
 
         // Boolean operators
         RecExpr::And { left, right } => {
-            let left_value = match interpret_expr(*left, env) {
+            let left_value = match interpret_expr(*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env) {
+            let right_value = match interpret_expr(*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -593,11 +621,11 @@ fn interpret_expr(expr: RecExpr, env: &mut Environment) -> Result<Option<Value>,
             }
         }
         RecExpr::Or { left, right } => {
-            let left_value = match interpret_expr(*left, env) {
+            let left_value = match interpret_expr(*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env) {
+            let right_value = match interpret_expr(*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -632,7 +660,7 @@ fn interpret_expr(expr: RecExpr, env: &mut Environment) -> Result<Option<Value>,
             // We also need all values that we will pass
             let mut arg_values = Vec::new();
             for arg in args {
-                match interpret_expr(arg, env) {
+                match interpret_expr(arg, env, terminal) {
                     Ok(Some(value)) => {
                         arg_values.push(value);
                     }
@@ -666,10 +694,11 @@ fn interpret_expr(expr: RecExpr, env: &mut Environment) -> Result<Option<Value>,
 
                     // Run all sub statements
                     for base_expression in body {
-                        let interp_result = match interpret_base_expr(base_expression, env) {
-                            Ok(result) => result,
-                            Err(e) => return Err(e),
-                        };
+                        let interp_result =
+                            match interpret_base_expr(base_expression, env, terminal) {
+                                Ok(result) => result,
+                                Err(e) => return Err(e),
+                            };
 
                         match interp_result {
                             InterpretationResult::Return {
@@ -690,6 +719,19 @@ fn interpret_expr(expr: RecExpr, env: &mut Environment) -> Result<Option<Value>,
                     // No return statement was found, thus return empty
                     return Ok(None);
                 }
+                Value::StandardFunction(StandardFunction::Print) => {
+                    for arg in arg_values {
+                        print!("{}", value_to_string(&arg));
+                    }
+                    return Ok(None);
+                }
+                Value::StandardFunction(StandardFunction::PrintLine) => {
+                    for arg in arg_values {
+                        print!("{}", value_to_string(&arg));
+                    }
+                    println!();
+                    return Ok(None);
+                }
                 other => {
                     return Err(format!(
                         "Expected function, found {} for variable {}",
@@ -704,7 +746,7 @@ fn interpret_expr(expr: RecExpr, env: &mut Environment) -> Result<Option<Value>,
             variable_name,
             right,
         } => {
-            let value = match interpret_expr(*right, env) {
+            let value = match interpret_expr(*right, env, terminal) {
                 Ok(right) => match right {
                     Some(value) => value,
                     None => return Err(String::from("Cannot assign to empty")),

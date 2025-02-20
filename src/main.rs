@@ -78,8 +78,8 @@ pub fn run_pipeline(path: &std::path::PathBuf) -> Result<String, String> {
 
     parser::print_expressions(&base_expressions);
 
-    let message = match interpreter::interpret(base_expressions) {
-        Ok(message) => message,
+    let output_terminal = match interpreter::interpret(base_expressions) {
+        Ok(output_terminal) => output_terminal,
         Err(error_message) => return Err(error_message),
     };
 

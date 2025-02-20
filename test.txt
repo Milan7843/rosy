@@ -1,2 +1,5 @@
 a = 5 + 3
-return a
+fun add(a, b)
+    return a + b
+println(a)
+println(add(5, 3))
