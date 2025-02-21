@@ -1,11 +1,21 @@
 use crate::tokenizer;
+use crate::tokenizer::Error;
 use crate::tokenizer::SymbolType;
 use crate::tokenizer::Token;
+use crate::tokenizer::TokenData;
 use crate::tokenizer::TokenLine;
 use std::f32::consts::{E, PI};
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum BaseExpr {
+pub struct BaseExpr {
+    pub data: BaseExprData,
+    pub row: usize,
+    pub col_start: usize,
+    pub col_end: usize,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum BaseExprData {
     Simple {
         expr: RecExpr,
     },
@@ -47,7 +57,15 @@ pub enum BaseExpr {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum RecExpr {
+pub struct RecExpr {
+    pub data: RecExprData,
+    pub row: usize,
+    pub col_start: usize,
+    pub col_end: usize,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum RecExprData {
     Variable {
         name: String,
     },
@@ -111,7 +129,15 @@ pub enum RecExpr {
 
 // Generic expression, leaves out detail in e.g. operator specifics
 #[derive(PartialEq, Clone)]
-enum GenExpr {
+struct GenExpr {
+    pub data: GenExprData,
+    pub row: usize,
+    pub col_start: usize,
+    pub col_end: usize,
+}
+
+#[derive(PartialEq, Clone)]
+enum GenExprData {
     Variable {
         name: String,
     },
@@ -139,7 +165,7 @@ enum GenExpr {
     },
 }
 
-pub fn parse(path: &std::path::PathBuf) -> Result<Vec<BaseExpr>, String> {
+pub fn parse(path: &std::path::PathBuf) -> Result<Vec<BaseExpr>, Error> {
     // Read the file into a big string
     let content = std::fs::read_to_string(path).expect("could not read file");
 
@@ -150,7 +176,7 @@ pub fn parse(path: &std::path::PathBuf) -> Result<Vec<BaseExpr>, String> {
     return parse_strings(lines);
 }
 
-pub fn parse_strings(lines: Vec<&str>) -> Result<Vec<BaseExpr>, String> {
+pub fn parse_strings(lines: Vec<&str>) -> Result<Vec<BaseExpr>, Error> {
     // First: tokenize the lines
     let token_lines = match tokenizer::tokenize(lines) {
         Ok(token_lines) => token_lines,
@@ -172,21 +198,21 @@ pub fn parse_strings(lines: Vec<&str>) -> Result<Vec<BaseExpr>, String> {
     return Ok(merged_base_expressions);
 }
 
-fn get_first_occurence(
+fn get_last_occurence(
     tokens: &[Token],
     match_on: Vec<SymbolType>,
-) -> Result<(SymbolType, usize), String> {
+) -> Result<(SymbolType, usize), Error> {
     let mut indentation_depth = 0;
 
-    for (i, token) in tokens.iter().enumerate() {
+    for (i, token) in tokens.iter().enumerate().rev() {
         // Keep track of the indentation depth
-        match token {
-            Token::Symbol {
+        match token.data {
+            TokenData::Symbol {
                 symbol_type: SymbolType::ParenthesisOpen,
-            } => indentation_depth += 1,
-            Token::Symbol {
-                symbol_type: SymbolType::ParenthesisClosed,
             } => indentation_depth -= 1,
+            TokenData::Symbol {
+                symbol_type: SymbolType::ParenthesisClosed,
+            } => indentation_depth += 1,
             _ => {}
         }
         // We are only looking for top-level symbols,
@@ -196,8 +222,8 @@ fn get_first_occurence(
         }
 
         for symbol_type in &match_on {
-            if *token
-                == (Token::Symbol {
+            if token.data
+                == (TokenData::Symbol {
                     symbol_type: symbol_type.clone(),
                 })
             {
@@ -206,10 +232,12 @@ fn get_first_occurence(
         }
     }
 
-    return Err(String::from("No occurances found"));
+    return Err(Error::SimpleError {
+        message: format!("No occurances found"),
+    });
 }
 
-fn get_expression(tokens: &[Token]) -> Result<RecExpr, String> {
+fn get_expression(tokens: &[Token]) -> Result<RecExpr, Error> {
     // First we get the generic expressions
     match get_generic_expression(tokens) {
         // And then convert the generic expression to a recursive expression
@@ -221,24 +249,32 @@ fn get_expression(tokens: &[Token]) -> Result<RecExpr, String> {
     }
 }
 
-fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecExpr, String> {
-    match gen_expr {
-        GenExpr::Variable { name } => return Ok(RecExpr::Variable { name }),
-        GenExpr::Number { number } => return Ok(RecExpr::Number { number }),
-        GenExpr::String { value } => return Ok(RecExpr::String { value }),
-        GenExpr::Boolean { value } => return Ok(RecExpr::Boolean { value }),
-        GenExpr::UnaryOp { operator, operand } => match operator {
+fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecExpr, Error> {
+    let data = match gen_expr.data {
+        GenExprData::Variable { name } => RecExprData::Variable { name },
+        GenExprData::Number { number } => RecExprData::Number { number },
+        GenExprData::String { value } => RecExprData::String { value },
+        GenExprData::Boolean { value } => RecExprData::Boolean { value },
+        GenExprData::UnaryOp { operator, operand } => match operator {
             SymbolType::Minus => match generic_expression_to_recursive_expression(*operand) {
-                Ok(operand_expr) => {
-                    return Ok(RecExpr::Minus {
-                        right: Box::new(operand_expr),
-                    })
-                }
+                Ok(operand_expr) => RecExprData::Minus {
+                    right: Box::new(operand_expr),
+                },
                 Err(e) => return Err(e),
             },
-            _ => return Err(String::from("Invalid unary operator")),
+            _ => {
+                return Err(Error::LocationError {
+                    message: format!(
+                        "Invalid unary operator: {}",
+                        tokenizer::get_symbol_from_type(&operator)
+                    ),
+                    row: gen_expr.row,
+                    col_start: gen_expr.col_start,
+                    col_end: gen_expr.col_end,
+                });
+            }
         },
-        GenExpr::BinaryOp {
+        GenExprData::BinaryOp {
             left_operand,
             operator,
             right_operand,
@@ -248,13 +284,12 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => {
-                        return Ok(RecExpr::Add {
-                            left: Box::new(left_expr),
-                            right: Box::new(right_expr),
-                        })
-                    }
-                    _ => return Err(String::from("Error reading subexpressions")),
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::Add {
+                        left: Box::new(left_expr),
+                        right: Box::new(right_expr),
+                    },
+                    (Err(e), _) => return Err(e),
+                    (_, Err(e)) => return Err(e),
                 }
             }
             SymbolType::Minus => {
@@ -262,13 +297,12 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => {
-                        return Ok(RecExpr::Subtract {
-                            left: Box::new(left_expr),
-                            right: Box::new(right_expr),
-                        })
-                    }
-                    _ => return Err(String::from("Error reading subexpressions")),
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::Subtract {
+                        left: Box::new(left_expr),
+                        right: Box::new(right_expr),
+                    },
+                    (Err(e), _) => return Err(e),
+                    (_, Err(e)) => return Err(e),
                 }
             }
             SymbolType::Star => {
@@ -276,13 +310,12 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => {
-                        return Ok(RecExpr::Multiply {
-                            left: Box::new(left_expr),
-                            right: Box::new(right_expr),
-                        })
-                    }
-                    _ => return Err(String::from("Error reading subexpressions")),
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::Multiply {
+                        left: Box::new(left_expr),
+                        right: Box::new(right_expr),
+                    },
+                    (Err(e), _) => return Err(e),
+                    (_, Err(e)) => return Err(e),
                 }
             }
             SymbolType::Slash => {
@@ -290,13 +323,12 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => {
-                        return Ok(RecExpr::Divide {
-                            left: Box::new(left_expr),
-                            right: Box::new(right_expr),
-                        })
-                    }
-                    _ => return Err(String::from("Error reading subexpressions")),
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::Divide {
+                        left: Box::new(left_expr),
+                        right: Box::new(right_expr),
+                    },
+                    (Err(e), _) => return Err(e),
+                    (_, Err(e)) => return Err(e),
                 }
             }
             SymbolType::Hat => {
@@ -304,13 +336,12 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => {
-                        return Ok(RecExpr::Power {
-                            left: Box::new(left_expr),
-                            right: Box::new(right_expr),
-                        })
-                    }
-                    _ => return Err(String::from("Error reading subexpressions")),
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::Power {
+                        left: Box::new(left_expr),
+                        right: Box::new(right_expr),
+                    },
+                    (Err(e), _) => return Err(e),
+                    (_, Err(e)) => return Err(e),
                 }
             }
             SymbolType::Or => {
@@ -318,13 +349,12 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => {
-                        return Ok(RecExpr::Or {
-                            left: Box::new(left_expr),
-                            right: Box::new(right_expr),
-                        })
-                    }
-                    _ => return Err(String::from("Error reading subexpressions")),
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::Or {
+                        left: Box::new(left_expr),
+                        right: Box::new(right_expr),
+                    },
+                    (Err(e), _) => return Err(e),
+                    (_, Err(e)) => return Err(e),
                 }
             }
             SymbolType::And => {
@@ -332,13 +362,12 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => {
-                        return Ok(RecExpr::And {
-                            left: Box::new(left_expr),
-                            right: Box::new(right_expr),
-                        })
-                    }
-                    _ => return Err(String::from("Error reading subexpressions")),
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::And {
+                        left: Box::new(left_expr),
+                        right: Box::new(right_expr),
+                    },
+                    (Err(e), _) => return Err(e),
+                    (_, Err(e)) => return Err(e),
                 }
             }
             SymbolType::EqualsEquals => {
@@ -346,18 +375,27 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => {
-                        return Ok(RecExpr::Equals {
-                            left: Box::new(left_expr),
-                            right: Box::new(right_expr),
-                        })
-                    }
-                    _ => return Err(String::from("Error reading subexpressions")),
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::Equals {
+                        left: Box::new(left_expr),
+                        right: Box::new(right_expr),
+                    },
+                    (Err(e), _) => return Err(e),
+                    (_, Err(e)) => return Err(e),
                 }
             }
-            _ => return Err(String::from("Invalid binary operator")),
+            _ => {
+                return Err(Error::LocationError {
+                    message: format!(
+                        "Invalid binary operator: {}",
+                        tokenizer::get_symbol_from_type(&operator)
+                    ),
+                    row: gen_expr.row,
+                    col_start: gen_expr.col_start,
+                    col_end: gen_expr.col_end,
+                });
+            }
         },
-        GenExpr::FunctionCall {
+        GenExprData::FunctionCall {
             function_name,
             arguments,
         } => {
@@ -368,15 +406,23 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     Err(e) => return Err(e),
                 }
             }
-            return Ok(RecExpr::FunctionCall {
+
+            RecExprData::FunctionCall {
                 function_name,
                 args: rec_expr_arguments,
-            });
+            }
         }
-    }
+    };
+
+    return Ok(RecExpr {
+        data,
+        row: gen_expr.row,
+        col_start: gen_expr.col_start,
+        col_end: gen_expr.col_end,
+    });
 }
 
-fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, String> {
+fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
     //let mut token_vec = Vec::from(tokens);
     //let root_token = parenthesize(&mut token_vec);
 
@@ -388,17 +434,25 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, String> {
     let precedence_six = Vec::from([SymbolType::And]);
 
     // Looking for the first lowest precedence operators
-    if let Ok((symbol_type, index)) = get_first_occurence(tokens, precedence_one) {
+    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_one) {
         let left = get_generic_expression(&tokens[0..index]);
         let right = get_generic_expression(&tokens[index + 1..]);
 
         match (left, right) {
             (Ok(left_expr), Ok(right_expr)) => {
-                return Ok(GenExpr::BinaryOp {
-                    left_operand: Box::new(left_expr),
-                    operator: symbol_type,
-                    right_operand: Box::new(right_expr),
-                })
+                let row = left_expr.row;
+                let col_start = left_expr.col_start;
+                let col_end = right_expr.col_end;
+                return Ok(GenExpr {
+                    data: GenExprData::BinaryOp {
+                        left_operand: Box::new(left_expr),
+                        operator: symbol_type,
+                        right_operand: Box::new(right_expr),
+                    },
+                    row,
+                    col_start,
+                    col_end,
+                });
             }
             (Err(e), _) => return Err(e),
             (_, Err(e)) => return Err(e),
@@ -406,17 +460,25 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, String> {
     }
 
     // Looking for the second lowest precedence operators
-    if let Ok((symbol_type, index)) = get_first_occurence(tokens, precedence_two) {
+    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_two) {
         let left = get_generic_expression(&tokens[0..index]);
         let right = get_generic_expression(&tokens[index + 1..]);
 
         match (left, right) {
             (Ok(left_expr), Ok(right_expr)) => {
-                return Ok(GenExpr::BinaryOp {
-                    left_operand: Box::new(left_expr),
-                    operator: symbol_type,
-                    right_operand: Box::new(right_expr),
-                })
+                let row = left_expr.row;
+                let col_start = left_expr.col_start;
+                let col_end = right_expr.col_end;
+                return Ok(GenExpr {
+                    data: GenExprData::BinaryOp {
+                        left_operand: Box::new(left_expr),
+                        operator: symbol_type,
+                        right_operand: Box::new(right_expr),
+                    },
+                    row,
+                    col_start,
+                    col_end,
+                });
             }
             (Err(e), _) => return Err(e),
             (_, Err(e)) => return Err(e),
@@ -424,17 +486,25 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, String> {
     }
 
     // Looking for the third lowest precedence operators
-    if let Ok((symbol_type, index)) = get_first_occurence(tokens, precedence_three) {
+    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_three) {
         let left = get_generic_expression(&tokens[0..index]);
         let right = get_generic_expression(&tokens[index + 1..]);
 
         match (left, right) {
             (Ok(left_expr), Ok(right_expr)) => {
-                return Ok(GenExpr::BinaryOp {
-                    left_operand: Box::new(left_expr),
-                    operator: symbol_type,
-                    right_operand: Box::new(right_expr),
-                })
+                let row = left_expr.row;
+                let col_start = left_expr.col_start;
+                let col_end = right_expr.col_end;
+                return Ok(GenExpr {
+                    data: GenExprData::BinaryOp {
+                        left_operand: Box::new(left_expr),
+                        operator: symbol_type,
+                        right_operand: Box::new(right_expr),
+                    },
+                    row,
+                    col_start,
+                    col_end,
+                });
             }
             (Err(e), _) => return Err(e),
             (_, Err(e)) => return Err(e),
@@ -442,17 +512,25 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, String> {
     }
 
     // Looking for the fourth lowest precedence operators
-    if let Ok((symbol_type, index)) = get_first_occurence(tokens, precedence_four) {
+    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_four) {
         let left = get_generic_expression(&tokens[0..index]);
         let right = get_generic_expression(&tokens[index + 1..]);
 
         match (left, right) {
             (Ok(left_expr), Ok(right_expr)) => {
-                return Ok(GenExpr::BinaryOp {
-                    left_operand: Box::new(left_expr),
-                    operator: symbol_type,
-                    right_operand: Box::new(right_expr),
-                })
+                let row = left_expr.row;
+                let col_start = left_expr.col_start;
+                let col_end = right_expr.col_end;
+                return Ok(GenExpr {
+                    data: GenExprData::BinaryOp {
+                        left_operand: Box::new(left_expr),
+                        operator: symbol_type,
+                        right_operand: Box::new(right_expr),
+                    },
+                    row,
+                    col_start,
+                    col_end,
+                });
             }
             (Err(e), _) => return Err(e),
             (_, Err(e)) => return Err(e),
@@ -460,17 +538,25 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, String> {
     }
 
     // Looking for the fifth lowest precedence operators
-    if let Ok((symbol_type, index)) = get_first_occurence(tokens, precedence_five) {
+    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_five) {
         let left = get_generic_expression(&tokens[0..index]);
         let right = get_generic_expression(&tokens[index + 1..]);
 
         match (left, right) {
             (Ok(left_expr), Ok(right_expr)) => {
-                return Ok(GenExpr::BinaryOp {
-                    left_operand: Box::new(left_expr),
-                    operator: symbol_type,
-                    right_operand: Box::new(right_expr),
-                })
+                let row = left_expr.row;
+                let col_start = left_expr.col_start;
+                let col_end = right_expr.col_end;
+                return Ok(GenExpr {
+                    data: GenExprData::BinaryOp {
+                        left_operand: Box::new(left_expr),
+                        operator: symbol_type,
+                        right_operand: Box::new(right_expr),
+                    },
+                    row,
+                    col_start,
+                    col_end,
+                });
             }
             (Err(e), _) => return Err(e),
             (_, Err(e)) => return Err(e),
@@ -478,17 +564,25 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, String> {
     }
 
     // Looking for the sixth lowest precedence operators
-    if let Ok((symbol_type, index)) = get_first_occurence(tokens, precedence_six) {
+    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_six) {
         let left = get_generic_expression(&tokens[0..index]);
         let right = get_generic_expression(&tokens[index + 1..]);
 
         match (left, right) {
             (Ok(left_expr), Ok(right_expr)) => {
-                return Ok(GenExpr::BinaryOp {
-                    left_operand: Box::new(left_expr),
-                    operator: symbol_type,
-                    right_operand: Box::new(right_expr),
-                })
+                let row = left_expr.row;
+                let col_start = left_expr.col_start;
+                let col_end = right_expr.col_end;
+                return Ok(GenExpr {
+                    data: GenExprData::BinaryOp {
+                        left_operand: Box::new(left_expr),
+                        operator: symbol_type,
+                        right_operand: Box::new(right_expr),
+                    },
+                    row,
+                    col_start,
+                    col_end,
+                });
             }
             (Err(e), _) => return Err(e),
             (_, Err(e)) => return Err(e),
@@ -499,21 +593,34 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, String> {
     // be a single expression which we can match for
 
     match tokens {
-        [Token::Variable {
-            name: function_name,
-        }, Token::Symbol {
-            symbol_type: SymbolType::ParenthesisOpen,
+        [Token {
+            data: TokenData::Variable {
+                name: function_name,
+            },
+            ..
+        }, Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::ParenthesisOpen,
+                },
+            ..
         }, rest @ ..]
-            if rest.last()
-                == Some(&Token::Symbol {
+            // Last token must be a closing parenthesis
+            if rest.last().unwrap().data
+                == TokenData::Symbol {
                     symbol_type: SymbolType::ParenthesisClosed,
-                }) =>
+                } =>
         {
             match read_function_parameters(rest) {
                 Ok(arguments) => {
-                    return Ok(GenExpr::FunctionCall {
-                        function_name: function_name.clone(),
-                        arguments: arguments,
+                    return Ok(GenExpr {
+                        data: GenExprData::FunctionCall {
+                            function_name: function_name.clone(),
+                            arguments: arguments,
+                        },
+                        row: tokens[0].row,
+                        col_start: tokens[0].col_start,
+                        col_end: tokens[tokens.len() - 1].col_end,
                     })
                 }
                 Err(e) => return Err(e),
@@ -522,57 +629,116 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, String> {
         }
 
         // Parentheses with content
-        [Token::Symbol {
-            symbol_type: SymbolType::ParenthesisOpen,
-        }, content @ .., Token::Symbol {
-            symbol_type: SymbolType::ParenthesisClosed,
+        [Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::ParenthesisOpen,
+                },
+            ..
+        }, content @ .., Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::ParenthesisClosed,
+                },
+            ..
         }] => {
             // Parentheses detected
-            return get_generic_expression(&content);
+            match get_generic_expression(&content) {
+                Ok(mut expr) => {
+                    expr.col_start -= 1;
+                    expr.col_end += 1;
+
+                    return Ok(expr);
+                }
+                Err(e) => return Err(e),
+            }
         }
 
         // Just a variable
-        [Token::Variable {
-            name: variable_name,
+        [Token {
+            data: TokenData::Variable {
+                name: variable_name,
+            },
+            ..
         }] => {
-            return Ok(GenExpr::Variable {
-                name: variable_name.clone(),
-            });
+            return Ok(GenExpr {
+                data: GenExprData::Variable {
+                    name: variable_name.clone(),
+                },
+                row: tokens[0].row,
+                col_start: tokens[0].col_start,
+                col_end: tokens[0].col_end,
+            })
         }
 
         // Just a number
-        [Token::Number { number }] => {
-            return Ok(GenExpr::Number { number: *number });
+        [Token {
+            data: TokenData::Number { number },
+            ..
+        }] => {
+            return Ok(GenExpr {
+                data: GenExprData::Number { number: *number },
+                row: tokens[0].row,
+                col_start: tokens[0].col_start,
+                col_end: tokens[0].col_end,
+            })
         }
 
         // Just a string
-        [Token::String { value }] => {
-            return Ok(GenExpr::String {
-                value: value.clone(),
-            });
+        [Token {
+            data: TokenData::String { value },
+            ..
+        }] => {
+            return Ok(GenExpr {
+                data: GenExprData::String {
+                    value: value.clone(),
+                },
+                row: tokens[0].row,
+                col_start: tokens[0].col_start,
+                col_end: tokens[0].col_end,
+            })
         }
 
         // True
-        [Token::Symbol {
-            symbol_type: SymbolType::True,
+        [Token {
+            data: TokenData::Symbol {
+                symbol_type: SymbolType::True,
+            },
+            ..
         }] => {
-            // Parentheses detected
-            return Ok(GenExpr::Boolean { value: true });
+            return Ok(GenExpr {
+                data: GenExprData::Boolean { value: true },
+                row: tokens[0].row,
+                col_start: tokens[0].col_start,
+                col_end: tokens[0].col_end,
+            })
         }
 
         // False
-        [Token::Symbol {
-            symbol_type: SymbolType::False,
+        [Token {
+            data: TokenData::Symbol {
+                symbol_type: SymbolType::False,
+            },
+            ..
         }] => {
-            // Parentheses detected
-            return Ok(GenExpr::Boolean { value: false });
+            return Ok(GenExpr {
+                data: GenExprData::Boolean { value: false },
+                row: tokens[0].row,
+                col_start: tokens[0].col_start,
+                col_end: tokens[0].col_end,
+            })
         }
 
-        _ => return Err(String::from("No matching expression found")),
+        [first, ..] => {
+            return Err(Error::LocationError { message: format!("No expression found"), row: first.row, col_start: first.col_start, col_end: first.col_end })
+        }
+        [] => {
+            return Err(Error::SimpleError { message: format!("No expression found") })
+        }
     }
 }
 
-fn read_function_parameters(line: &[Token]) -> Result<Vec<GenExpr>, String> {
+fn read_function_parameters(line: &[Token]) -> Result<Vec<GenExpr>, Error> {
     let mut parameters: Vec<GenExpr> = Vec::new();
 
     match read_function_parameters_rec(line, &mut parameters) {
@@ -584,7 +750,7 @@ fn read_function_parameters(line: &[Token]) -> Result<Vec<GenExpr>, String> {
 fn read_function_parameters_rec(
     line: &[Token],
     parameters: &mut Vec<GenExpr>,
-) -> Result<String, String> {
+) -> Result<String, Error> {
     // Attempt to read a function parameter by trying to find a valid expression looking at each comma
 
     match read_function_parameter(line) {
@@ -598,24 +764,28 @@ fn read_function_parameters_rec(
     }
 }
 
-fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token]), String> {
+fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token]), Error> {
     // Attempt to read a function parameter by trying to find a valid expression looking at each comma
     match line {
         // Found the end of the function parameters, stopping now
-        [Token::Symbol {
-            symbol_type: SymbolType::ParenthesisClosed,
-        }, rest @ ..] => {
-            return Ok((None, rest));
-        }
+        [Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::ParenthesisClosed,
+                },
+            ..
+        }, rest @ ..] => return Ok((None, rest)),
         _ => {
             if line.len() <= 1 {
-                return Err(String::from("Could not find a valid function call"));
+                return Err(Error::SimpleError {
+                    message: format!("Could not find a valid function call"),
+                });
             }
 
             let mut parenthesis_depth = 1;
             for i in 1..line.len() {
-                match line[i] {
-                    Token::Symbol {
+                match line[i].data {
+                    TokenData::Symbol {
                         symbol_type: SymbolType::Comma,
                     } => {
                         // Check if we're in main body of the function call
@@ -627,10 +797,10 @@ fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token])
                             }
                         }
                     }
-                    Token::Symbol {
+                    TokenData::Symbol {
                         symbol_type: SymbolType::ParenthesisOpen,
                     } => parenthesis_depth += 1,
-                    Token::Symbol {
+                    TokenData::Symbol {
                         symbol_type: SymbolType::ParenthesisClosed,
                     } => {
                         parenthesis_depth -= 1;
@@ -646,7 +816,9 @@ fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token])
             }
 
             // No valid expression was found
-            return Err(String::from("No valid function call was found"));
+            return Err(Error::SimpleError {
+                message: format!("Could not find a valid function call"),
+            });
         }
     }
 }
@@ -654,10 +826,10 @@ fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token])
 fn add_to_if_statement(
     if_statement: &mut BaseExpr,
     else_statement_to_add: BaseExpr,
-) -> Result<String, String> {
-    match if_statement {
-        BaseExpr::IfStatement { else_statement, .. }
-        | BaseExpr::ElseIfStatement { else_statement, .. } => match else_statement {
+) -> Result<String, Error> {
+    match &mut if_statement.data {
+        BaseExprData::IfStatement { else_statement, .. }
+        | BaseExprData::ElseIfStatement { else_statement, .. } => match else_statement {
             Some(embedded_if_statement) => {
                 return add_to_if_statement(embedded_if_statement, else_statement_to_add);
             }
@@ -667,21 +839,24 @@ fn add_to_if_statement(
             }
         },
         _ => {
-            return Err(String::from(
-                "Could not find if statement to add else statement to",
-            ))
+            return Err(Error::LocationError {
+                message: format!("Could not find if statement to add else statement to"),
+                row: else_statement_to_add.row,
+                col_start: else_statement_to_add.col_start,
+                col_end: else_statement_to_add.col_end,
+            });
         }
     }
 }
 
-fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>, String> {
+fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>, Error> {
     let mut merged_statements = Vec::new();
 
-    // This can probably be done with copying every single item...
+    // This can probably be done without copying every single item...
 
     for base_expression in base_expressions {
-        match base_expression {
-            BaseExpr::IfStatement {
+        match base_expression.data {
+            BaseExprData::IfStatement {
                 condition,
                 body,
                 else_statement,
@@ -692,13 +867,18 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
                     Err(e) => return Err(e),
                 };
 
-                merged_statements.push(BaseExpr::IfStatement {
-                    condition: condition,
-                    body: merged_body,
-                    else_statement: else_statement,
+                merged_statements.push(BaseExpr {
+                    data: BaseExprData::IfStatement {
+                        condition: condition,
+                        body: merged_body,
+                        else_statement: else_statement,
+                    },
+                    row: base_expression.row,
+                    col_start: base_expression.col_start,
+                    col_end: base_expression.col_end,
                 });
             }
-            BaseExpr::ElseIfStatement {
+            BaseExprData::ElseIfStatement {
                 condition, body, ..
             } => {
                 // Recursively merge if statements in the body
@@ -708,13 +888,23 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
                 };
 
                 match merged_statements.last_mut() {
-                    Some(upper_if_statement @ BaseExpr::IfStatement { .. }) => {
+                    Some(
+                        upper_if_statement @ BaseExpr {
+                            data: BaseExprData::IfStatement { .. },
+                            ..
+                        },
+                    ) => {
                         match add_to_if_statement(
                             upper_if_statement,
-                            BaseExpr::ElseIfStatement {
-                                condition,
-                                body: merged_body,
-                                else_statement: None,
+                            BaseExpr {
+                                data: BaseExprData::ElseIfStatement {
+                                    condition,
+                                    body: merged_body,
+                                    else_statement: None,
+                                },
+                                row: base_expression.row,
+                                col_start: base_expression.col_start,
+                                col_end: base_expression.col_end,
                             },
                         ) {
                             Ok(_) => {}
@@ -722,37 +912,57 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
                         }
                     }
                     _ => {
-                        return Err(String::from(
-                            "Found no if statement to attach else if statement to",
-                        ));
+                        return Err(Error::LocationError {
+                            message: format!(
+                                "Could not find if statement to add else-if statement to"
+                            ),
+                            row: base_expression.row,
+                            col_start: base_expression.col_start,
+                            col_end: base_expression.col_end,
+                        });
                     }
                 }
             }
-            BaseExpr::ElseStatement { body } => {
+            BaseExprData::ElseStatement { body } => {
                 // Recursively merge if statements in the body
                 let merged_body = match merge_if_statements(body) {
                     Ok(body) => body,
                     Err(e) => return Err(e),
                 };
 
-                match merged_statements.last_mut() {
-                    Some(upper_if_statement @ BaseExpr::IfStatement { .. }) => {
+                match &mut merged_statements.last_mut() {
+                    Some(
+                        upper_if_statement @ BaseExpr {
+                            data: BaseExprData::IfStatement { .. },
+                            ..
+                        },
+                    ) => {
                         match add_to_if_statement(
                             upper_if_statement,
-                            BaseExpr::ElseStatement { body: merged_body },
+                            BaseExpr {
+                                data: BaseExprData::ElseStatement { body: merged_body },
+                                row: base_expression.row,
+                                col_start: base_expression.col_start,
+                                col_end: base_expression.col_end,
+                            },
                         ) {
                             Ok(_) => {}
                             Err(e) => return Err(e),
                         }
                     }
                     _ => {
-                        return Err(String::from(
-                            "Found no if statement to attach else statement to",
-                        ));
+                        return Err(Error::LocationError {
+                            message: format!(
+                                "Could not find if statement to add else statement to"
+                            ),
+                            row: base_expression.row,
+                            col_start: base_expression.col_start,
+                            col_end: base_expression.col_end,
+                        });
                     }
                 }
             }
-            BaseExpr::ForLoop {
+            BaseExprData::ForLoop {
                 var_name,
                 until,
                 body,
@@ -763,13 +973,18 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
                     Err(e) => return Err(e),
                 };
 
-                merged_statements.push(BaseExpr::ForLoop {
-                    var_name: var_name,
-                    until: until,
-                    body: merged_body,
+                merged_statements.push(BaseExpr {
+                    data: BaseExprData::ForLoop {
+                        var_name: var_name,
+                        until: until,
+                        body: merged_body,
+                    },
+                    row: base_expression.row,
+                    col_start: base_expression.col_start,
+                    col_end: base_expression.col_end,
                 });
             }
-            BaseExpr::FunctionDefinition {
+            BaseExprData::FunctionDefinition {
                 fun_name,
                 args,
                 body,
@@ -780,14 +995,22 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
                     Err(e) => return Err(e),
                 };
 
-                merged_statements.push(BaseExpr::FunctionDefinition {
-                    fun_name: fun_name,
-                    args: args,
-                    body: merged_body,
+                merged_statements.push(BaseExpr {
+                    data: BaseExprData::FunctionDefinition {
+                        fun_name: fun_name,
+                        args: args,
+                        body: merged_body,
+                    },
+                    row: base_expression.row,
+                    col_start: base_expression.col_start,
+                    col_end: base_expression.col_end,
                 });
             }
             other => {
-                merged_statements.push(other);
+                merged_statements.push(BaseExpr {
+                    data: other,
+                    ..base_expression
+                });
             }
         }
     }
@@ -795,7 +1018,7 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
     return Ok(merged_statements);
 }
 
-fn get_base_expressions(token_lines: &Vec<TokenLine>) -> Result<Vec<BaseExpr>, String> {
+fn get_base_expressions(token_lines: &Vec<TokenLine>) -> Result<Vec<BaseExpr>, Error> {
     let mut line_iterator = token_lines.iter().peekable();
 
     return get_base_expressions_with_indentation(&mut line_iterator, 0);
@@ -803,8 +1026,8 @@ fn get_base_expressions(token_lines: &Vec<TokenLine>) -> Result<Vec<BaseExpr>, S
 
 fn get_base_expressions_with_indentation(
     token_lines_iter: &mut std::iter::Peekable<std::slice::Iter<'_, TokenLine>>,
-    indentation: i32,
-) -> Result<Vec<BaseExpr>, String> {
+    indentation: usize,
+) -> Result<Vec<BaseExpr>, Error> {
     let mut expressions = Vec::new();
 
     while let Some(token_line) = token_lines_iter.peek() {
@@ -824,40 +1047,67 @@ fn get_base_expressions_with_indentation(
 
 fn get_base_expression(
     token_lines_iter: &mut std::iter::Peekable<std::slice::Iter<'_, TokenLine>>,
-) -> Result<BaseExpr, String> {
+) -> Result<BaseExpr, Error> {
     let Some(token_line) = token_lines_iter.next() else {
-        return Err(String::from("No more lines found"));
+        return Err(Error::SimpleError {
+            message: format!("No more lines found"),
+        });
     };
 
     let tokens = &token_line.tokens;
+    let (row, col_start, col_end) = match &tokens[..] {
+        [first, .., last] => (first.row, first.col_start, last.col_end),
+        [only_one] => (only_one.row, only_one.col_start, only_one.col_end),
+        _ => {
+            return Err(Error::SimpleError {
+                message: format!("No tokens found"),
+            });
+        }
+    };
 
-    match &tokens[..] {
-        [Token::Variable { name }, Token::Symbol {
-            symbol_type: SymbolType::Equals,
+    let data: BaseExprData = match &tokens[..] {
+        [Token {
+            data: TokenData::Variable { name },
+            ..
+        }, Token {
+            data: TokenData::Symbol {
+                symbol_type: SymbolType::Equals,
+            },
+            ..
         }, rest @ ..] => {
             let expression = match get_expression(rest) {
                 Ok(expression) => expression,
                 Err(error_message) => return Err(error_message),
             };
-            return Ok(BaseExpr::VariableAssignment {
+            BaseExprData::VariableAssignment {
                 var_name: name.clone(),
                 expr: expression,
-            });
+            }
         }
-        [Token::Variable { name }, Token::Symbol {
-            symbol_type: SymbolType::PlusEquals,
+        [Token {
+            data: TokenData::Variable { name },
+            ..
+        }, Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::PlusEquals,
+                },
+            ..
         }, rest @ ..] => {
             let expression = match get_expression(rest) {
                 Ok(expression) => expression,
                 Err(error_message) => return Err(error_message),
             };
-            return Ok(BaseExpr::PlusEqualsStatement {
+            BaseExprData::PlusEqualsStatement {
                 var_name: name.clone(),
                 expr: expression,
-            });
+            }
         }
-        [Token::Symbol {
-            symbol_type: SymbolType::If,
+        [Token {
+            data: TokenData::Symbol {
+                symbol_type: SymbolType::If,
+            },
+            ..
         }, rest @ ..] => {
             let condition = match get_expression(rest) {
                 Ok(expression) => expression,
@@ -872,16 +1122,22 @@ fn get_base_expression(
                 Err(e) => return Err(e),
             };
 
-            return Ok(BaseExpr::IfStatement {
+            BaseExprData::IfStatement {
                 condition,
                 body,
                 else_statement: None,
-            });
+            }
         }
-        [Token::Symbol {
-            symbol_type: SymbolType::Else,
-        }, Token::Symbol {
-            symbol_type: SymbolType::If,
+        [Token {
+            data: TokenData::Symbol {
+                symbol_type: SymbolType::Else,
+            },
+            ..
+        }, Token {
+            data: TokenData::Symbol {
+                symbol_type: SymbolType::If,
+            },
+            ..
         }, rest @ ..] => {
             let condition = match get_expression(rest) {
                 Ok(expression) => expression,
@@ -896,17 +1152,36 @@ fn get_base_expression(
                 Err(e) => return Err(e),
             };
 
-            return Ok(BaseExpr::ElseIfStatement {
+            BaseExprData::ElseIfStatement {
                 condition,
                 body,
                 else_statement: None,
-            });
+            }
         }
-        [Token::Symbol {
-            symbol_type: SymbolType::Else,
+        [Token {
+            data: TokenData::Symbol {
+                symbol_type: SymbolType::Else,
+            },
+            ..
         }, rest @ ..] => {
-            if rest.len() > 0 {
-                return Err(String::from("Unexpected extra tokens on else statement"));
+            match rest {
+                [first, .., last] => {
+                    return Err(Error::LocationError {
+                        message: format!("Unexpected extra tokens on else statement"),
+                        row: first.row,
+                        col_start: first.col_start,
+                        col_end: last.col_end,
+                    });
+                }
+                [only_one] => {
+                    return Err(Error::LocationError {
+                        message: format!("Unexpected extra tokens on else statement"),
+                        row: only_one.row,
+                        col_start: only_one.col_start,
+                        col_end: only_one.col_end,
+                    });
+                }
+                _ => {}
             }
 
             let body = match get_base_expressions_with_indentation(
@@ -917,23 +1192,51 @@ fn get_base_expression(
                 Err(e) => return Err(e),
             };
 
-            return Ok(BaseExpr::ElseStatement { body });
+            BaseExprData::ElseStatement { body }
         }
-        [Token::Symbol {
-            symbol_type: SymbolType::Break,
+        [Token {
+            data: TokenData::Symbol {
+                symbol_type: SymbolType::Break,
+            },
+            ..
         }, rest @ ..] => {
-            if rest.len() > 0 {
-                return Err(String::from("Unexpected extra tokens on break statement"));
+            match rest {
+                [first, .., last] => {
+                    return Err(Error::LocationError {
+                        message: format!("Unexpected extra tokens on else statement"),
+                        row: first.row,
+                        col_start: first.col_start,
+                        col_end: last.col_end,
+                    });
+                }
+                [only_one] => {
+                    return Err(Error::LocationError {
+                        message: format!("Unexpected extra tokens on else statement"),
+                        row: only_one.row,
+                        col_start: only_one.col_start,
+                        col_end: only_one.col_end,
+                    });
+                }
+                _ => {}
             }
 
-            return Ok(BaseExpr::Break);
+            BaseExprData::Break
         }
-        [Token::Symbol {
-            symbol_type: SymbolType::For,
-        }, Token::Variable {
-            name: variable_name,
-        }, Token::Symbol {
-            symbol_type: SymbolType::In,
+        [Token {
+            data: TokenData::Symbol {
+                symbol_type: SymbolType::For,
+            },
+            ..
+        }, Token {
+            data: TokenData::Variable {
+                name: variable_name,
+            },
+            ..
+        }, Token {
+            data: TokenData::Symbol {
+                symbol_type: SymbolType::In,
+            },
+            ..
         }, rest @ ..] => {
             let range = match get_expression(rest) {
                 Ok(expression) => expression,
@@ -948,22 +1251,52 @@ fn get_base_expression(
                 Err(e) => return Err(e),
             };
 
-            return Ok(BaseExpr::ForLoop {
+            BaseExprData::ForLoop {
                 var_name: variable_name.clone(),
                 until: range,
                 body: body,
-            });
+            }
         }
-        [Token::Symbol {
-            symbol_type: SymbolType::Fun,
-        }, Token::Variable {
-            name: function_name,
-        }, Token::Symbol {
-            symbol_type: SymbolType::ParenthesisOpen,
+        [Token {
+            data: TokenData::Symbol {
+                symbol_type: SymbolType::Fun,
+            },
+            row,
+            col_start,
+            ..
+        }, Token {
+            data: TokenData::Variable {
+                name: function_name,
+            },
+            ..
+        }, Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::ParenthesisOpen,
+                },
+            col_end,
+            ..
         }, rest @ ..] => {
             let parameters = match parse_function_parameters(rest) {
                 Ok(parameters) => parameters,
-                Err(e) => return Err(e),
+                Err(_) => match rest {
+                    [.., last] => {
+                        return Err(Error::LocationError {
+                            message: format!("Invalid function parameters"),
+                            row: *row,
+                            col_start: *col_start,
+                            col_end: last.col_end,
+                        })
+                    }
+                    _ => {
+                        return Err(Error::LocationError {
+                            message: format!("Invalid function parameters"),
+                            row: *row,
+                            col_start: *col_start,
+                            col_end: *col_end,
+                        })
+                    }
+                },
             };
 
             let body = match get_base_expressions_with_indentation(
@@ -974,43 +1307,59 @@ fn get_base_expression(
                 Err(e) => return Err(e),
             };
 
-            return Ok(BaseExpr::FunctionDefinition {
+            BaseExprData::FunctionDefinition {
                 fun_name: function_name.clone(),
                 args: parameters,
                 body: body,
-            });
+            }
         }
-        [Token::Symbol {
-            symbol_type: SymbolType::Return,
+        [Token {
+            data: TokenData::Symbol {
+                symbol_type: SymbolType::Return,
+            },
+            ..
         }, rest @ ..] => {
             if rest.len() == 0 {
-                return Ok(BaseExpr::Return { return_value: None });
+                BaseExprData::Return { return_value: None }
+            } else {
+                let expression = match get_expression(rest) {
+                    Ok(expression) => expression,
+                    Err(error_message) => return Err(error_message),
+                };
+                BaseExprData::Return {
+                    return_value: Some(expression),
+                }
             }
-
-            let expression = match get_expression(rest) {
-                Ok(expression) => expression,
-                Err(error_message) => return Err(error_message),
-            };
-            return Ok(BaseExpr::Return {
-                return_value: Some(expression),
-            });
         }
         rest @ _ => {
             let expression = match get_expression(rest) {
                 Ok(expression) => expression,
                 Err(error_message) => return Err(error_message),
             };
-            return Ok(BaseExpr::Simple { expr: expression });
+            BaseExprData::Simple { expr: expression }
         }
-    }
+    };
+
+    return Ok(BaseExpr {
+        data,
+        row,
+        col_start,
+        col_end,
+    });
 }
 
-fn parse_function_parameters(tokens: &[Token]) -> Result<Vec<String>, String> {
+fn parse_function_parameters(tokens: &[Token]) -> Result<Vec<String>, Error> {
     match tokens {
-        [Token::Variable {
-            name: parameter_name,
-        }, Token::Symbol {
-            symbol_type: SymbolType::Comma,
+        [Token {
+            data: TokenData::Variable {
+                name: parameter_name,
+            },
+            ..
+        }, Token {
+            data: TokenData::Symbol {
+                symbol_type: SymbolType::Comma,
+            },
+            ..
         }, rest @ ..] => match parse_function_parameters(rest) {
             Ok(mut other_parameters) => {
                 other_parameters.insert(0, parameter_name.clone());
@@ -1018,21 +1367,57 @@ fn parse_function_parameters(tokens: &[Token]) -> Result<Vec<String>, String> {
             }
             Err(e) => return Err(e),
         },
-        [Token::Variable {
-            name: parameter_name,
-        }, Token::Symbol {
-            symbol_type: SymbolType::ParenthesisClosed,
-        }] => return Ok(vec![parameter_name.clone()]),
-        [Token::Symbol {
-            symbol_type: SymbolType::ParenthesisClosed,
+
+        [Token {
+            data: TokenData::Variable {
+                name: parameter_name,
+            },
+            ..
+        }, Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::ParenthesisClosed,
+                },
+            ..
+        }] => {
+            return Ok(vec![parameter_name.clone()]);
+        }
+
+        // Closing bracket
+        [Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::ParenthesisClosed,
+                },
+            ..
         }, rest @ ..] => {
-            if rest.len() > 0 {
-                return Err(String::from("Unexpected tokens after function definition"));
+            match rest {
+                [first, .., last] => {
+                    return Err(Error::LocationError {
+                        message: format!("Unexpected extra tokens on else statement"),
+                        row: first.row,
+                        col_start: first.col_start,
+                        col_end: last.col_end,
+                    });
+                }
+                [only_one] => {
+                    return Err(Error::LocationError {
+                        message: format!("Unexpected extra tokens on else statement"),
+                        row: only_one.row,
+                        col_start: only_one.col_start,
+                        col_end: only_one.col_end,
+                    });
+                }
+                _ => {}
             }
 
             return Ok(Vec::new());
         }
-        _ => return Err(String::from("Invalid function parameter definition")),
+        _ => {
+            return Err(Error::SimpleError {
+                message: format!("Invalid function parameter definition"),
+            })
+        }
     }
 }
 
@@ -1062,19 +1447,19 @@ fn print_indentation(indentation: i32) {
 
 fn print_expression(expression: &BaseExpr, indentation: i32) {
     print_indentation(indentation);
-    match expression {
-        BaseExpr::Simple { expr } => print_recursive_expression(expr),
-        BaseExpr::VariableAssignment { var_name, expr } => {
+    match &expression.data {
+        BaseExprData::Simple { expr } => print_recursive_expression(expr),
+        BaseExprData::VariableAssignment { var_name, expr } => {
             print!("VarAssign({var_name:?}, ");
             print_recursive_expression(expr);
             print!(")");
         }
-        BaseExpr::PlusEqualsStatement { var_name, expr } => {
+        BaseExprData::PlusEqualsStatement { var_name, expr } => {
             print!("PlusEquals({var_name:?}, ");
             print_recursive_expression(expr);
             print!(")");
         }
-        BaseExpr::IfStatement {
+        BaseExprData::IfStatement {
             condition, body, ..
         } => {
             print!("IfSt(");
@@ -1084,7 +1469,7 @@ fn print_expression(expression: &BaseExpr, indentation: i32) {
                 print_expression(expr, indentation + 1);
             }
         }
-        BaseExpr::ElseIfStatement {
+        BaseExprData::ElseIfStatement {
             condition, body, ..
         } => {
             print!("ElseIfSt(");
@@ -1094,14 +1479,14 @@ fn print_expression(expression: &BaseExpr, indentation: i32) {
                 print_expression(expr, indentation + 1);
             }
         }
-        BaseExpr::ElseStatement { body } => {
+        BaseExprData::ElseStatement { body } => {
             print!("ElseSt(");
             for expr in body {
                 print_expression(expr, indentation + 1);
             }
             print!(")");
         }
-        BaseExpr::ForLoop {
+        BaseExprData::ForLoop {
             var_name,
             until,
             body,
@@ -1114,7 +1499,7 @@ fn print_expression(expression: &BaseExpr, indentation: i32) {
             }
             print!(")");
         }
-        BaseExpr::FunctionDefinition {
+        BaseExprData::FunctionDefinition {
             fun_name,
             args,
             body,
@@ -1131,7 +1516,7 @@ fn print_expression(expression: &BaseExpr, indentation: i32) {
                 print_expression(expr, indentation + 1);
             }
         }
-        BaseExpr::Return { return_value } => {
+        BaseExprData::Return { return_value } => {
             print!("Return(");
             match return_value {
                 Some(expr) => print_recursive_expression(expr),
@@ -1139,89 +1524,89 @@ fn print_expression(expression: &BaseExpr, indentation: i32) {
             }
             print!(")")
         }
-        BaseExpr::Break => print!("break"),
+        BaseExprData::Break => print!("break"),
     }
 }
 
 fn print_recursive_expression(expression: &RecExpr) {
-    match expression {
-        RecExpr::Variable { name } => print!("Var({name:?})"),
-        RecExpr::Number { number } => print!("Num({number})"),
-        RecExpr::String { value } => print!("Str({value:?})"),
-        RecExpr::Boolean { value } => print!("Bool({value})"),
-        RecExpr::Assign {
+    match &expression.data {
+        RecExprData::Variable { name } => print!("Var({name:?})"),
+        RecExprData::Number { number } => print!("Num({number})"),
+        RecExprData::String { value } => print!("Str({value:?})"),
+        RecExprData::Boolean { value } => print!("Bool({value})"),
+        RecExprData::Assign {
             variable_name,
             right,
         } => {
             print!("Var({variable_name:?}) = ");
             print_recursive_expression(&*right);
         }
-        RecExpr::Add { left, right } => {
+        RecExprData::Add { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" + ");
             print_recursive_expression(&*right);
             print!(")")
         }
-        RecExpr::Subtract { left, right } => {
+        RecExprData::Subtract { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" - ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExpr::Multiply { left, right } => {
+        RecExprData::Multiply { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" * ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExpr::Divide { left, right } => {
+        RecExprData::Divide { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" / ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExpr::Power { left, right } => {
+        RecExprData::Power { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" ^ ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExpr::Minus { right } => {
+        RecExprData::Minus { right } => {
             print!("(");
             print!("- ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExpr::Or { left, right } => {
+        RecExprData::Or { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" or ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExpr::And { left, right } => {
+        RecExprData::And { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" and ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExpr::Equals { left, right } => {
+        RecExprData::Equals { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" == ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExpr::Access { object, variable } => {
+        RecExprData::Access { object, variable } => {
             print!("{object:?}.{variable:?}");
         }
-        RecExpr::FunctionCall {
+        RecExprData::FunctionCall {
             function_name,
             args,
         } => {

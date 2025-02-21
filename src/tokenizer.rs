@@ -1,3 +1,15 @@
+pub enum Error {
+    LocationError {
+        message: String,
+        row: usize,
+        col_start: usize,
+        col_end: usize,
+    },
+    SimpleError {
+        message: String,
+    },
+}
+
 #[derive(PartialEq)]
 enum CharType {
     Space,
@@ -44,7 +56,15 @@ pub enum SymbolType {
 }
 
 #[derive(PartialEq, Clone, Debug)]
-pub enum Token {
+pub struct Token {
+    pub data: TokenData,
+    pub row: usize,
+    pub col_start: usize,
+    pub col_end: usize,
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub enum TokenData {
     Variable { name: String },
     Symbol { symbol_type: SymbolType },
     Number { number: i32 },
@@ -54,13 +74,13 @@ pub enum Token {
 #[derive(PartialEq, Debug)]
 pub struct TokenLine {
     pub tokens: Vec<Token>,
-    pub indentation: i32,
+    pub indentation: usize,
 }
 
 static RESERVED_SYMBOLS: [char; 11] = ['=', '+', '-', '*', '/', '^', '.', ',', '(', ')', '"'];
 static BINARY_OPERATORS: [&str; 9] = ["+", "-", "*", "/", "^", ".", "==", "or", "and"];
 
-fn get_symbol_type(symbol: &String) -> Result<SymbolType, String> {
+fn get_symbol_type(symbol: &String) -> Result<SymbolType, Error> {
     match symbol {
         s if s == "=" => Ok(SymbolType::Equals),
         s if s == "-" => Ok(SymbolType::Minus),
@@ -86,11 +106,13 @@ fn get_symbol_type(symbol: &String) -> Result<SymbolType, String> {
         s if s == "+=" => Ok(SymbolType::PlusEquals),
         s if s == "true" => Ok(SymbolType::True),
         s if s == "false" => Ok(SymbolType::False),
-        _ => Err(String::from("String is not a Symbol")),
+        _ => Err(Error::SimpleError {
+            message: format!("{} is not a Symbol", symbol),
+        }),
     }
 }
 
-fn get_symbol_from_type(symbol_type: &SymbolType) -> String {
+pub fn get_symbol_from_type(symbol_type: &SymbolType) -> String {
     match symbol_type {
         SymbolType::Equals => String::from("="),
         SymbolType::Minus => String::from("-"),
@@ -126,23 +148,29 @@ fn is_symbol(symbol: &String) -> bool {
     }
 }
 
-fn separate_symbols(symbol: &str) -> Result<Vec<Token>, String> {
+fn separate_symbols(
+    symbol: &str,
+    row_index: usize,
+    start_column: usize,
+) -> Result<Vec<Token>, Error> {
     let mut symbols: Vec<Token> = Vec::new();
 
     if symbol.len() == 0 {
         return Ok(symbols);
     }
 
-    println!("called with {}", symbol);
-
     for i in (1..=symbol.len()).rev() {
         let left_side = String::from(&symbol[0..i]);
 
-        println!("let side: {}, right side: {}", left_side, &symbol[i..]);
         match get_symbol_type(&left_side) {
             Ok(symbol_type) => {
-                symbols.push(Token::Symbol { symbol_type });
-                match separate_symbols(&symbol[i..]) {
+                symbols.push(Token {
+                    data: TokenData::Symbol { symbol_type },
+                    row: row_index,
+                    col_start: start_column,
+                    col_end: start_column + i,
+                });
+                match separate_symbols(&symbol[i..], row_index, start_column + i) {
                     Ok(mut rest_symbols) => {
                         symbols.append(&mut rest_symbols);
                         return Ok(symbols);
@@ -154,10 +182,12 @@ fn separate_symbols(symbol: &str) -> Result<Vec<Token>, String> {
         }
     }
 
-    return Err(String::from("No symbol combination found"));
+    return Err(Error::SimpleError {
+        message: format!("No symbol combination found for {}", symbol),
+    });
 }
 
-fn count_indentation(line: &String) -> Result<i32, String> {
+fn count_indentation(line: &String, line_index: usize) -> Result<usize, Error> {
     let indentation_spaces = 4;
     let mut indentation = 0;
     if line.len() == 0 {
@@ -176,7 +206,7 @@ fn count_indentation(line: &String) -> Result<i32, String> {
     }
 
     // Use space indentation
-    let mut leading_spaces = 0;
+    let mut leading_spaces: usize = 0;
     for c in line.chars() {
         if c == ' ' {
             leading_spaces += 1;
@@ -189,27 +219,34 @@ fn count_indentation(line: &String) -> Result<i32, String> {
         return Ok(leading_spaces / indentation_spaces);
     }
 
-    return Err(String::from("Invalid indentation"));
+    return Err(Error::LocationError {
+        message: format!("Invalid indentation"),
+        row: line_index,
+        col_start: 0,
+        col_end: leading_spaces,
+    });
 }
 
-pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
+pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, Error> {
     let mut cleaned_lines: Vec<String> = Vec::new();
+    let mut line_indices: Vec<usize> = Vec::new();
 
-    for line in lines {
+    for (line_index, line) in lines.iter().enumerate() {
         let mut line_cleaned = line.replace("\r", "");
         // Removing empty lines
         if line_cleaned.replace(" ", "").replace("\t", "").len() == 0 {
             continue;
         }
-        line_cleaned = line_cleaned.replace("\t", "");
+        line_cleaned = line_cleaned.replace("\t", "    ");
         println!("cleaned line: {line_cleaned:?}");
         cleaned_lines.push(line_cleaned);
+        line_indices.push(line_index);
     }
 
     let mut token_lines: Vec<TokenLine> = Vec::new();
 
-    for line in cleaned_lines {
-        let indentation = match count_indentation(&line) {
+    for (line_index, line) in line_indices.iter().zip(cleaned_lines.iter()) {
+        let indentation = match count_indentation(&line, *line_index) {
             Ok(indentation) => indentation,
             Err(error_message) => return Err(error_message),
         };
@@ -227,16 +264,22 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
         let mut current_variable = String::new();
         let mut in_symbol = false;
         let mut current_symbol = String::new();
+        let mut current_token_start = 0;
 
-        for c in line.chars() {
+        for (current_column, c) in line.chars().enumerate() {
             let char_type: CharType = get_char_type(c);
 
             if in_string {
                 match get_symbol_type(&String::from(c)) {
                     // Found the second quotation mark
                     Ok(SymbolType::QuotationMark) => {
-                        token_line.tokens.push(Token::String {
-                            value: current_string,
+                        token_line.tokens.push(Token {
+                            data: TokenData::String {
+                                value: current_string.clone(),
+                            },
+                            row: *line_index,
+                            col_start: current_token_start,
+                            col_end: current_column + 1,
                         });
 
                         in_string = false;
@@ -252,8 +295,13 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
 
             // If we move out of a number
             if in_number && char_type != CharType::Number {
-                token_line.tokens.push(Token::Number {
-                    number: current_number,
+                token_line.tokens.push(Token {
+                    data: TokenData::Number {
+                        number: current_number,
+                    },
+                    row: *line_index,
+                    col_start: current_token_start,
+                    col_end: current_column,
                 });
                 current_number = 0;
                 in_number = false;
@@ -264,11 +312,21 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
                 // The string might be a symbol so we check for that
                 match get_symbol_type(&current_variable) {
                     // String was a symbol
-                    Ok(symbol_type) => token_line.tokens.push(Token::Symbol { symbol_type }),
+                    Ok(symbol_type) => token_line.tokens.push(Token {
+                        data: TokenData::Symbol { symbol_type },
+                        row: *line_index,
+                        col_start: current_token_start,
+                        col_end: current_column,
+                    }),
 
                     // String was just a variable
-                    Err(_) => token_line.tokens.push(Token::Variable {
-                        name: current_variable,
+                    Err(_) => token_line.tokens.push(Token {
+                        data: TokenData::Variable {
+                            name: current_variable.clone(),
+                        },
+                        row: *line_index,
+                        col_start: current_token_start,
+                        col_end: current_column,
                     }),
                 }
                 current_variable = String::new();
@@ -278,17 +336,29 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
             // If we move out of a symbol
             if in_symbol && char_type != CharType::Symbol {
                 match get_symbol_type(&current_symbol) {
-                    Ok(symbol_type) => token_line.tokens.push(Token::Symbol { symbol_type }),
-                    Err(_) => match separate_symbols(&current_symbol) {
-                        Ok(symbols_separated) => {
-                            for symbol in symbols_separated {
-                                token_line.tokens.push(symbol);
+                    Ok(symbol_type) => token_line.tokens.push(Token {
+                        data: TokenData::Symbol { symbol_type },
+                        row: *line_index,
+                        col_start: current_token_start,
+                        col_end: current_column,
+                    }),
+                    Err(_) => {
+                        match separate_symbols(&current_symbol, *line_index, current_token_start) {
+                            Ok(symbols_separated) => {
+                                for symbol in symbols_separated {
+                                    token_line.tokens.push(symbol);
+                                }
+                            }
+                            Err(_) => {
+                                return Err(Error::LocationError {
+                                    message: format!("Invalid symbol: {}", current_symbol),
+                                    row: *line_index,
+                                    col_start: current_token_start,
+                                    col_end: current_column,
+                                });
                             }
                         }
-                        Err(_) => {
-                            return Err(String::from("Found an invalid symbol: ") + &current_symbol)
-                        }
-                    },
+                    }
                 }
                 current_symbol = String::new();
                 in_symbol = false;
@@ -304,12 +374,19 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
                             // Save current symbol
                             if in_symbol {
                                 match get_symbol_type(&current_symbol) {
-                                    Ok(symbol_type) => {
-                                        token_line.tokens.push(Token::Symbol { symbol_type })
-                                    }
+                                    Ok(symbol_type) => token_line.tokens.push(Token {
+                                        data: TokenData::Symbol { symbol_type },
+                                        row: *line_index,
+                                        col_start: current_token_start,
+                                        col_end: current_column,
+                                    }),
                                     Err(_) => {
-                                        return Err(String::from("Found an invalid symbol: ")
-                                            + &current_symbol)
+                                        return Err(Error::LocationError {
+                                            message: format!("Invalid symbol: {}", current_symbol),
+                                            row: *line_index,
+                                            col_start: current_token_start,
+                                            col_end: current_column,
+                                        });
                                     }
                                 }
                             }
@@ -317,8 +394,14 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
                             in_symbol = false;
                             in_string = true;
                             current_symbol = String::new();
+                            current_token_start = current_column;
                         }
                         _ => {
+                            // If we just entered a symbol, keep track of the location
+                            if !in_symbol {
+                                current_token_start = current_column;
+                            }
+
                             in_symbol = true;
                             current_symbol.push(c);
                         }
@@ -332,6 +415,11 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
                         continue;
                     }
 
+                    // If we just entered a number, keep track of the location
+                    if !in_number {
+                        current_token_start = current_column;
+                    }
+
                     in_number = true;
                     if let Some(number) = c.to_digit(10) {
                         current_number = current_number * 10 + number as i32;
@@ -339,6 +427,11 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
                 }
 
                 CharType::Variable => {
+                    // If we just entered a variable, keep track of the location
+                    if !in_variable {
+                        current_token_start = current_column;
+                    }
+
                     in_variable = true;
                     current_variable.push(c);
                 }
@@ -347,8 +440,13 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
 
         // If we are still in a number at the end
         if in_number {
-            token_line.tokens.push(Token::Number {
-                number: current_number,
+            token_line.tokens.push(Token {
+                data: TokenData::Number {
+                    number: current_number,
+                },
+                row: *line_index,
+                col_start: current_token_start,
+                col_end: line.len(),
             });
         }
 
@@ -357,11 +455,21 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
             // The string might be a symbol so we check for that
             match get_symbol_type(&current_variable) {
                 // String was a symbol
-                Ok(symbol_type) => token_line.tokens.push(Token::Symbol { symbol_type }),
+                Ok(symbol_type) => token_line.tokens.push(Token {
+                    data: TokenData::Symbol { symbol_type },
+                    row: *line_index,
+                    col_start: current_token_start,
+                    col_end: line.len(),
+                }),
 
                 // String was just a variable
-                Err(_) => token_line.tokens.push(Token::Variable {
-                    name: current_variable,
+                Err(_) => token_line.tokens.push(Token {
+                    data: TokenData::Variable {
+                        name: current_variable.clone(),
+                    },
+                    row: *line_index,
+                    col_start: current_token_start,
+                    col_end: line.len(),
                 }),
             }
         }
@@ -369,17 +477,29 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, String> {
         // If we are still in a symbol at the end
         if in_symbol {
             match get_symbol_type(&current_symbol) {
-                Ok(symbol_type) => token_line.tokens.push(Token::Symbol { symbol_type }),
-                Err(_) => match separate_symbols(&current_symbol) {
-                    Ok(symbols_separated) => {
-                        for symbol in symbols_separated {
-                            token_line.tokens.push(symbol);
+                Ok(symbol_type) => token_line.tokens.push(Token {
+                    data: TokenData::Symbol { symbol_type },
+                    row: *line_index,
+                    col_start: current_token_start,
+                    col_end: line.len(),
+                }),
+                Err(_) => {
+                    match separate_symbols(&current_symbol, *line_index, current_token_start) {
+                        Ok(symbols_separated) => {
+                            for symbol in symbols_separated {
+                                token_line.tokens.push(symbol);
+                            }
+                        }
+                        Err(_) => {
+                            return Err(Error::LocationError {
+                                message: format!("Invalid symbol: {}", current_symbol),
+                                row: *line_index,
+                                col_start: current_token_start,
+                                col_end: line.len(),
+                            });
                         }
                     }
-                    Err(_) => {
-                        return Err(String::from("Found an invalid symbol: ") + &current_symbol)
-                    }
-                },
+                }
             }
         }
 
@@ -406,10 +526,10 @@ pub fn print_tokens(token_line: &TokenLine) {
 }
 
 pub fn print_token(token: &Token) {
-    match token {
-        Token::Variable { name } => print!("Var({name:?})"),
-        Token::Number { number } => print!("Num({number})"),
-        Token::String { value } => print!("Str({value:?})"),
-        Token::Symbol { symbol_type } => print!("Sym{}", get_symbol_from_type(symbol_type)),
+    match &token.data {
+        TokenData::Variable { name } => print!("Var({name:?})"),
+        TokenData::Number { number } => print!("Num({number})"),
+        TokenData::String { value } => print!("Str({value:?})"),
+        TokenData::Symbol { symbol_type } => print!("Sym{}", get_symbol_from_type(symbol_type)),
     }
 }

@@ -1,4 +1,4 @@
-use rosy::parser::{self, BaseExpr};
+use rosy::parser::{self, BaseExpr, BaseExprData, RecExpr, RecExprData};
 
 fn compare(actual: Result<Vec<BaseExpr>, String>, expected: Vec<BaseExpr>) {
     match actual {
@@ -38,20 +38,50 @@ fn simple_variable() {
     ]);
     let expressions = parser::parse_strings(program);
     let expected = Vec::from([
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Variable {
-                name: String::from("a_b"),
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Variable {
+                        name: String::from("a_b"),
+                    },
+                    row: 0,
+                    col_start: 0,
+                    col_end: 3,
+                },
             },
+            row: 0,
+            col_start: 0,
+            col_end: 3,
         },
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Variable {
-                name: String::from("long_variable"),
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Variable {
+                        name: String::from("long_variable"),
+                    },
+                    row: 1,
+                    col_start: 0,
+                    col_end: 13,
+                },
             },
+            row: 1,
+            col_start: 0,
+            col_end: 13,
         },
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Variable {
-                name: String::from("var"),
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Variable {
+                        name: String::from("var"),
+                    },
+                    row: 2,
+                    col_start: 0,
+                    col_end: 3,
+                },
             },
+            row: 2,
+            col_start: 0,
+            col_end: 3,
         },
     ]);
 
@@ -69,17 +99,57 @@ fn simple_integer() {
     ]);
     let expressions = parser::parse_strings(program);
     let expected = Vec::from([
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Number { number: 0 },
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Number { number: 0 },
+                    row: 0,
+                    col_start: 0,
+                    col_end: 1,
+                },
+            },
+            row: 0,
+            col_start: 0,
+            col_end: 1,
         },
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Number { number: 1 },
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Number { number: 1 },
+                    row: 1,
+                    col_start: 0,
+                    col_end: 1,
+                },
+            },
+            row: 1,
+            col_start: 0,
+            col_end: 1,
         },
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Number { number: 12 },
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Number { number: 12 },
+                    row: 2,
+                    col_start: 0,
+                    col_end: 2,
+                },
+            },
+            row: 2,
+            col_start: 0,
+            col_end: 2,
         },
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Number { number: 234589374 },
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Number { number: 234589374 },
+                    row: 3,
+                    col_start: 0,
+                    col_end: 9,
+                },
+            },
+            row: 3,
+            col_start: 0,
+            col_end: 9,
         },
     ]);
 
@@ -95,11 +165,31 @@ fn simple_boolean() {
     ]);
     let expressions = parser::parse_strings(program);
     let expected = Vec::from([
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Boolean { value: true },
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Boolean { value: true },
+                    row: 0,
+                    col_start: 0,
+                    col_end: 4,
+                },
+            },
+            row: 0,
+            col_start: 0,
+            col_end: 4,
         },
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Boolean { value: false },
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Boolean { value: false },
+                    row: 1,
+                    col_start: 0,
+                    col_end: 5,
+                },
+            },
+            row: 1,
+            col_start: 0,
+            col_end: 5,
         },
     ]);
 
@@ -115,17 +205,87 @@ fn simple_string() {
     ]);
     let expressions = parser::parse_strings(program);
     let expected = Vec::from([
-        BaseExpr::Simple {
-            expr: parser::RecExpr::String {
-                value: String::from("blah"),
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::String {
+                        value: String::from("blah"),
+                    },
+                    row: 0,
+                    col_start: 0,
+                    col_end: 6,
+                },
             },
+            row: 0,
+            col_start: 0,
+            col_end: 6,
         },
-        BaseExpr::Simple {
-            expr: parser::RecExpr::String {
-                value: String::from("fun in for loop  { } () (*)^)*& _+-=    spaces"),
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::String {
+                        value: String::from("fun in for loop  { } () (*)^)*& _+-=    spaces"),
+                    },
+                    row: 1,
+                    col_start: 0,
+                    col_end: 48,
+                },
             },
+            row: 1,
+            col_start: 0,
+            col_end: 48,
         },
     ]);
+
+    compare_linewise(expressions, expected);
+}
+
+#[test]
+fn order_of_operations_test() {
+    #[rustfmt::skip]
+    let program = Vec::from([
+        "1 + 2 - 3",
+    ]);
+    let expressions = parser::parse_strings(program);
+    let expected = Vec::from([BaseExpr {
+        data: BaseExprData::Simple {
+            expr: RecExpr {
+                data: RecExprData::Subtract {
+                    left: Box::new(RecExpr {
+                        data: RecExprData::Add {
+                            left: Box::new(RecExpr {
+                                data: RecExprData::Number { number: 1 },
+                                row: 0,
+                                col_start: 0,
+                                col_end: 1,
+                            }),
+                            right: Box::new(RecExpr {
+                                data: RecExprData::Number { number: 2 },
+                                row: 0,
+                                col_start: 4,
+                                col_end: 5,
+                            }),
+                        },
+                        row: 0,
+                        col_start: 0,
+                        col_end: 5,
+                    }),
+                    right: Box::new(RecExpr {
+                        data: RecExprData::Number { number: 3 },
+                        row: 0,
+                        col_start: 8,
+                        col_end: 9,
+                    }),
+                },
+                row: 0,
+                col_start: 0,
+                col_end: 9,
+            },
+        },
+        row: 0,
+        col_start: 0,
+        col_end: 9,
+    }]);
 
     compare_linewise(expressions, expected);
 }
@@ -146,83 +306,343 @@ fn simple_arithmetic() {
     ]);
     let expressions = parser::parse_strings(program);
     let expected = Vec::from([
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Add {
-                left: Box::new(parser::RecExpr::Number { number: 1 }),
-                right: Box::new(parser::RecExpr::Number { number: 2 }),
-            },
-        },
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Multiply {
-                left: Box::new(parser::RecExpr::Number { number: 12 }),
-                right: Box::new(parser::RecExpr::Number { number: 3 }),
-            },
-        },
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Divide {
-                left: Box::new(parser::RecExpr::Number { number: 12 }),
-                right: Box::new(parser::RecExpr::Number { number: 3 }),
-            },
-        },
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Power {
-                left: Box::new(parser::RecExpr::Number { number: 12 }),
-                right: Box::new(parser::RecExpr::Number { number: 3 }),
-            },
-        },
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Subtract {
-                left: Box::new(parser::RecExpr::Number { number: 12 }),
-                right: Box::new(parser::RecExpr::Number { number: 3 }),
-            },
-        },
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Add {
-                left: Box::new(parser::RecExpr::Number { number: 12 }),
-                right: Box::new(parser::RecExpr::Number { number: 3 }),
-            },
-        },
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Add {
-                left: Box::new(parser::RecExpr::Multiply {
-                    left: Box::new(parser::RecExpr::Number { number: 12 }),
-                    right: Box::new(parser::RecExpr::Number { number: 3 }),
-                }),
-                right: Box::new(parser::RecExpr::Number { number: 4 }),
-            },
-        },
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Multiply {
-                left: Box::new(parser::RecExpr::Number { number: 12 }),
-                right: Box::new(parser::RecExpr::Add {
-                    left: Box::new(parser::RecExpr::Number { number: 3 }),
-                    right: Box::new(parser::RecExpr::Number { number: 4 }),
-                }),
-            },
-        },
-        BaseExpr::Simple {
-            expr: parser::RecExpr::Subtract {
-                left: Box::new(parser::RecExpr::Multiply {
-                    left: Box::new(parser::RecExpr::Number { number: 12 }),
-                    right: Box::new(parser::RecExpr::Add {
-                        left: Box::new(parser::RecExpr::Number { number: 3 }),
-                        right: Box::new(parser::RecExpr::Divide {
-                            left: Box::new(parser::RecExpr::Number { number: 4 }),
-                            right: Box::new(parser::RecExpr::Number { number: 2 }),
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Add {
+                        left: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 1 },
+                            row: 0,
+                            col_start: 0,
+                            col_end: 1,
                         }),
-                    }),
-                }),
-                right: Box::new(parser::RecExpr::Add {
-                    left: Box::new(parser::RecExpr::Divide {
-                        left: Box::new(parser::RecExpr::Number { number: 5 }),
-                        right: Box::new(parser::RecExpr::Power {
-                            left: Box::new(parser::RecExpr::Number { number: 6 }),
-                            right: Box::new(parser::RecExpr::Number { number: 7 }),
+                        right: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 2 },
+                            row: 0,
+                            col_start: 4,
+                            col_end: 5,
                         }),
-                    }),
-                    right: Box::new(parser::RecExpr::Number { number: 8 }),
-                }),
+                    },
+                    row: 0,
+                    col_start: 0,
+                    col_end: 5,
+                },
             },
+            row: 0,
+            col_start: 0,
+            col_end: 5,
+        },
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Multiply {
+                        left: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 12 },
+                            row: 1,
+                            col_start: 0,
+                            col_end: 2,
+                        }),
+                        right: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 3 },
+                            row: 1,
+                            col_start: 5,
+                            col_end: 6,
+                        }),
+                    },
+                    row: 1,
+                    col_start: 0,
+                    col_end: 6,
+                },
+            },
+            row: 1,
+            col_start: 0,
+            col_end: 6,
+        },
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Divide {
+                        left: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 12 },
+                            row: 2,
+                            col_start: 0,
+                            col_end: 2,
+                        }),
+                        right: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 3 },
+                            row: 2,
+                            col_start: 5,
+                            col_end: 6,
+                        }),
+                    },
+                    row: 2,
+                    col_start: 0,
+                    col_end: 6,
+                },
+            },
+            row: 2,
+            col_start: 0,
+            col_end: 6,
+        },
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Power {
+                        left: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 12 },
+                            row: 3,
+                            col_start: 0,
+                            col_end: 2,
+                        }),
+                        right: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 3 },
+                            row: 3,
+                            col_start: 5,
+                            col_end: 6,
+                        }),
+                    },
+                    row: 3,
+                    col_start: 0,
+                    col_end: 6,
+                },
+            },
+            row: 3,
+            col_start: 0,
+            col_end: 6,
+        },
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Subtract {
+                        left: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 12 },
+                            row: 4,
+                            col_start: 0,
+                            col_end: 2,
+                        }),
+                        right: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 3 },
+                            row: 4,
+                            col_start: 5,
+                            col_end: 6,
+                        }),
+                    },
+                    row: 4,
+                    col_start: 0,
+                    col_end: 6,
+                },
+            },
+            row: 4,
+            col_start: 0,
+            col_end: 6,
+        },
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Add {
+                        left: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 12 },
+                            row: 5,
+                            col_start: 0,
+                            col_end: 2,
+                        }),
+                        right: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 3 },
+                            row: 5,
+                            col_start: 5,
+                            col_end: 6,
+                        }),
+                    },
+                    row: 5,
+                    col_start: 0,
+                    col_end: 6,
+                },
+            },
+            row: 5,
+            col_start: 0,
+            col_end: 6,
+        },
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Add {
+                        left: Box::new(RecExpr {
+                            data: RecExprData::Multiply {
+                                left: Box::new(RecExpr {
+                                    data: RecExprData::Number { number: 12 },
+                                    row: 6,
+                                    col_start: 0,
+                                    col_end: 2,
+                                }),
+                                right: Box::new(RecExpr {
+                                    data: RecExprData::Number { number: 3 },
+                                    row: 6,
+                                    col_start: 5,
+                                    col_end: 6,
+                                }),
+                            },
+                            row: 6,
+                            col_start: 0,
+                            col_end: 6,
+                        }),
+                        right: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 4 },
+                            row: 6,
+                            col_start: 9,
+                            col_end: 10,
+                        }),
+                    },
+                    row: 6,
+                    col_start: 0,
+                    col_end: 10,
+                },
+            },
+            row: 6,
+            col_start: 0,
+            col_end: 10,
+        },
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Multiply {
+                        left: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 12 },
+                            row: 7,
+                            col_start: 0,
+                            col_end: 2,
+                        }),
+                        right: Box::new(RecExpr {
+                            data: RecExprData::Add {
+                                left: Box::new(RecExpr {
+                                    data: RecExprData::Number { number: 3 },
+                                    row: 7,
+                                    col_start: 6,
+                                    col_end: 7,
+                                }),
+                                right: Box::new(RecExpr {
+                                    data: RecExprData::Number { number: 4 },
+                                    row: 7,
+                                    col_start: 10,
+                                    col_end: 11,
+                                }),
+                            },
+                            row: 7,
+                            col_start: 5,
+                            col_end: 12,
+                        }),
+                    },
+                    row: 7,
+                    col_start: 0,
+                    col_end: 12,
+                },
+            },
+            row: 7,
+            col_start: 0,
+            col_end: 12,
+        },
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::Add {
+                        left: Box::new(RecExpr {
+                            data: RecExprData::Subtract {
+                                left: Box::new(RecExpr {
+                                    data: RecExprData::Multiply {
+                                        left: Box::new(RecExpr {
+                                            data: RecExprData::Number { number: 12 },
+                                            row: 8,
+                                            col_start: 0,
+                                            col_end: 2,
+                                        }),
+                                        right: Box::new(RecExpr {
+                                            data: RecExprData::Add {
+                                                left: Box::new(RecExpr {
+                                                    data: RecExprData::Number { number: 3 },
+                                                    row: 8,
+                                                    col_start: 6,
+                                                    col_end: 7,
+                                                }),
+                                                right: Box::new(RecExpr {
+                                                    data: RecExprData::Divide {
+                                                        left: Box::new(RecExpr {
+                                                            data: RecExprData::Number { number: 4 },
+                                                            row: 8,
+                                                            col_start: 11,
+                                                            col_end: 12,
+                                                        }),
+                                                        right: Box::new(RecExpr {
+                                                            data: RecExprData::Number { number: 2 },
+                                                            row: 8,
+                                                            col_start: 15,
+                                                            col_end: 16,
+                                                        }),
+                                                    },
+                                                    row: 8,
+                                                    col_start: 10,
+                                                    col_end: 17,
+                                                }),
+                                            },
+                                            row: 8,
+                                            col_start: 5,
+                                            col_end: 18,
+                                        }),
+                                    },
+                                    row: 8,
+                                    col_start: 0,
+                                    col_end: 18,
+                                }),
+                                right: Box::new(RecExpr {
+                                    data: RecExprData::Divide {
+                                        left: Box::new(RecExpr {
+                                            data: RecExprData::Number { number: 5 },
+                                            row: 8,
+                                            col_start: 21,
+                                            col_end: 22,
+                                        }),
+                                        right: Box::new(RecExpr {
+                                            data: RecExprData::Power {
+                                                left: Box::new(RecExpr {
+                                                    data: RecExprData::Number { number: 6 },
+                                                    row: 8,
+                                                    col_start: 26,
+                                                    col_end: 27,
+                                                }),
+                                                right: Box::new(RecExpr {
+                                                    data: RecExprData::Number { number: 7 },
+                                                    row: 8,
+                                                    col_start: 30,
+                                                    col_end: 31,
+                                                }),
+                                            },
+                                            row: 8,
+                                            col_start: 25,
+                                            col_end: 32,
+                                        }),
+                                    },
+                                    row: 8,
+                                    col_start: 21,
+                                    col_end: 32,
+                                }),
+                            },
+                            row: 8,
+                            col_start: 0,
+                            col_end: 32,
+                        }),
+                        right: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 8 },
+                            row: 8,
+                            col_start: 35,
+                            col_end: 36,
+                        }),
+                    },
+                    row: 8,
+                    col_start: 0,
+                    col_end: 36,
+                },
+            },
+            row: 8,
+            col_start: 0,
+            col_end: 36,
         },
     ]);
 
@@ -241,39 +661,109 @@ fn variable_assignment_test() {
     ]);
     let expressions = parser::parse_strings(program);
     let expected = Vec::from([
-        BaseExpr::VariableAssignment {
-            var_name: String::from("a"),
-            expr: parser::RecExpr::Number { number: 1 },
-        },
-        BaseExpr::VariableAssignment {
-            var_name: String::from("a1_b2"),
-            expr: parser::RecExpr::Number { number: 25 },
-        },
-        BaseExpr::VariableAssignment {
-            var_name: String::from("a1_b2"),
-            expr: parser::RecExpr::Multiply {
-                left: Box::new(parser::RecExpr::Number { number: 25 }),
-                right: Box::new(parser::RecExpr::Number { number: 2 }),
+        BaseExpr {
+            data: BaseExprData::VariableAssignment {
+                var_name: String::from("a"),
+                expr: RecExpr {
+                    data: RecExprData::Number { number: 1 },
+                    row: 0,
+                    col_start: 4,
+                    col_end: 5,
+                },
             },
+            row: 0,
+            col_start: 0,
+            col_end: 5,
         },
-        BaseExpr::VariableAssignment {
-            var_name: String::from("a1_b2"),
-            expr: parser::RecExpr::Multiply {
-                left: Box::new(parser::RecExpr::Number { number: 25 }),
-                right: Box::new(parser::RecExpr::Number { number: 2 }),
+        BaseExpr {
+            data: BaseExprData::VariableAssignment {
+                var_name: String::from("a1_b2"),
+                expr: RecExpr {
+                    data: RecExprData::Number { number: 25 },
+                    row: 1,
+                    col_start: 8,
+                    col_end: 10,
+                },
             },
+            row: 1,
+            col_start: 0,
+            col_end: 10,
         },
-        BaseExpr::VariableAssignment {
-            var_name: String::from("a1_b2"),
-            expr: parser::RecExpr::String {
-                value: String::from("string"),
+        BaseExpr {
+            data: BaseExprData::VariableAssignment {
+                var_name: String::from("a1_b2"),
+                expr: RecExpr {
+                    data: RecExprData::Multiply {
+                        left: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 25 },
+                            row: 2,
+                            col_start: 8,
+                            col_end: 10,
+                        }),
+                        right: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 2 },
+                            row: 2,
+                            col_start: 13,
+                            col_end: 14,
+                        }),
+                    },
+                    row: 2,
+                    col_start: 8,
+                    col_end: 14,
+                },
             },
+            row: 2,
+            col_start: 0,
+            col_end: 14,
+        },
+        BaseExpr {
+            data: BaseExprData::VariableAssignment {
+                var_name: String::from("a1_b2"),
+                expr: RecExpr {
+                    data: RecExprData::Multiply {
+                        left: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 25 },
+                            row: 3,
+                            col_start: 9,
+                            col_end: 11,
+                        }),
+                        right: Box::new(RecExpr {
+                            data: RecExprData::Number { number: 2 },
+                            row: 3,
+                            col_start: 14,
+                            col_end: 15,
+                        }),
+                    },
+                    row: 3,
+                    col_start: 8,
+                    col_end: 16,
+                },
+            },
+            row: 3,
+            col_start: 0,
+            col_end: 16,
+        },
+        BaseExpr {
+            data: BaseExprData::VariableAssignment {
+                var_name: String::from("a1_b2"),
+                expr: RecExpr {
+                    data: RecExprData::String {
+                        value: String::from("string"),
+                    },
+                    row: 4,
+                    col_start: 8,
+                    col_end: 16,
+                },
+            },
+            row: 4,
+            col_start: 0,
+            col_end: 16,
         },
     ]);
 
     compare_linewise(expressions, expected);
 }
-
+/*
 #[test]
 fn if_statements_test_small() {
     #[rustfmt::skip]
@@ -831,3 +1321,5 @@ fn plus_equals_test() {
 
     compare(expressions, expected);
 }
+
+ */

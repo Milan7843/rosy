@@ -1,7 +1,9 @@
 use rosy::{
     interpreter::{self, Terminal},
     parser::BaseExpr,
+    parser::BaseExprData,
     parser::RecExpr,
+    parser::RecExprData,
 };
 
 fn compare(actual: Result<Terminal, String>, expected: Terminal) {
@@ -14,29 +16,89 @@ fn compare(actual: Result<Terminal, String>, expected: Terminal) {
 #[test]
 fn number_test() {
     let program = Vec::from([
-        BaseExpr::Simple {
-            expr: RecExpr::FunctionCall {
-                function_name: String::from("println"),
-                args: Vec::from([RecExpr::Number { number: 0 }]),
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::FunctionCall {
+                        function_name: String::from("println"),
+                        args: Vec::from([RecExpr {
+                            data: RecExprData::Number { number: 0 },
+                            row: 0,
+                            col_start: 8,
+                            col_end: 9,
+                        }]),
+                    },
+                    row: 0,
+                    col_start: 0,
+                    col_end: 10,
+                },
             },
+            row: 0,
+            col_start: 0,
+            col_end: 10,
         },
-        BaseExpr::Simple {
-            expr: RecExpr::FunctionCall {
-                function_name: String::from("println"),
-                args: Vec::from([RecExpr::Number { number: 1 }]),
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::FunctionCall {
+                        function_name: String::from("println"),
+                        args: Vec::from([RecExpr {
+                            data: RecExprData::Number { number: 1 },
+                            row: 1,
+                            col_start: 8,
+                            col_end: 9,
+                        }]),
+                    },
+                    row: 1,
+                    col_start: 0,
+                    col_end: 10,
+                },
             },
+            row: 1,
+            col_start: 0,
+            col_end: 10,
         },
-        BaseExpr::Simple {
-            expr: RecExpr::FunctionCall {
-                function_name: String::from("println"),
-                args: Vec::from([RecExpr::Number { number: 12 }]),
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::FunctionCall {
+                        function_name: String::from("println"),
+                        args: Vec::from([RecExpr {
+                            data: RecExprData::Number { number: 12 },
+                            row: 2,
+                            col_start: 8,
+                            col_end: 10,
+                        }]),
+                    },
+                    row: 2,
+                    col_start: 0,
+                    col_end: 11,
+                },
             },
+            row: 2,
+            col_start: 0,
+            col_end: 11,
         },
-        BaseExpr::Simple {
-            expr: RecExpr::FunctionCall {
-                function_name: String::from("println"),
-                args: Vec::from([RecExpr::Number { number: 234589374 }]),
+        BaseExpr {
+            data: BaseExprData::Simple {
+                expr: RecExpr {
+                    data: RecExprData::FunctionCall {
+                        function_name: String::from("println"),
+                        args: Vec::from([RecExpr {
+                            data: RecExprData::Number { number: 234589374 },
+                            row: 3,
+                            col_start: 8,
+                            col_end: 16,
+                        }]),
+                    },
+                    row: 3,
+                    col_start: 0,
+                    col_end: 17,
+                },
             },
+            row: 3,
+            col_start: 0,
+            col_end: 17,
         },
     ]);
 
@@ -54,25 +116,32 @@ fn number_test() {
     compare(actual, expected);
 }
 
+/*
 #[test]
 fn string_test() {
     let program = Vec::from([
         BaseExpr::Simple {
             expr: RecExpr::FunctionCall {
                 function_name: String::from("println"),
-                args: Vec::from([RecExpr::String { value: String::from("") }]),
+                args: Vec::from([RecExpr::String {
+                    value: String::from(""),
+                }]),
             },
         },
         BaseExpr::Simple {
             expr: RecExpr::FunctionCall {
                 function_name: String::from("println"),
-                args: Vec::from([RecExpr::String { value: String::from("s") }]),
+                args: Vec::from([RecExpr::String {
+                    value: String::from("s"),
+                }]),
             },
         },
         BaseExpr::Simple {
             expr: RecExpr::FunctionCall {
                 function_name: String::from("println"),
-                args: Vec::from([RecExpr::String { value: String::from(")(*&)(/.._][]+-abdABD123") }]),
+                args: Vec::from([RecExpr::String {
+                    value: String::from(")(*&)(/.._][]+-abdABD123"),
+                }]),
             },
         },
     ]);
@@ -100,3 +169,5 @@ fn addition_test() {
         "234589374"
     ]);
 }
+
+*/

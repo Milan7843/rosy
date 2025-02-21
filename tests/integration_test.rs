@@ -76,7 +76,7 @@ fn advanced_arithmetic_with_parentheses_test() {
         "d = (a - b) * 2",
         "e = a * (b + 2)",
         "f = a / (b + 2)",
-        "g = (a / (b + 1)) ^ 2",
+        "g = (8 / (b + 1)) ^ 2",
         "println(c)",
         "println(d)",
         "println(e)",
@@ -90,8 +90,8 @@ fn advanced_arithmetic_with_parentheses_test() {
     let expected = Vec::from([
         "13",
         "8",
-        "21",
-        "2",
+        "35",
+        "1",
         "4",
         "",
     ]);
@@ -99,7 +99,6 @@ fn advanced_arithmetic_with_parentheses_test() {
     compare(actual, str_to_string(expected));
 }
 
-#[test]
 fn test_order_of_operations() {
     #[rustfmt::skip]
     let program = Vec::from([

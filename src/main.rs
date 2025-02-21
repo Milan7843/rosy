@@ -1,8 +1,8 @@
 use clap::Parser;
 use rosy::interpreter;
 use rosy::parser;
-use rosy::tokenizer;
 use rosy::pipeline;
+use rosy::tokenizer;
 
 // Language features:
 /*
@@ -66,7 +66,7 @@ pub fn main() {
     println!("path: {:?}", args.path);
 
     match pipeline::run_pipeline_from_path(&args.path) {
-        Ok(terminal) => {},
+        Ok(terminal) => {}
         Err(err) => println!("{err}"),
     }
 }
