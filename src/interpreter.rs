@@ -131,11 +131,7 @@ fn interpret_base_expr(
             };
 
             // Now we add this value to the scope
-            let scope = env.last_mut().unwrap();
-            scope.push(Binding {
-                name: var_name,
-                value: value,
-            });
+            update_or_add_in_scope(&value, &var_name, env.last_mut().unwrap());
             return Ok(InterpretationResult::Empty);
         }
         BaseExpr {
@@ -147,6 +143,10 @@ fn interpret_base_expr(
                 },
             ..
         } => {
+            let row = condition.row;
+            let col_start = condition.col_start;
+            let col_end = condition.col_end;
+
             let condition = match interpret_expr(condition, env, terminal) {
                 Ok(Some(Value::Bool(condition))) => condition,
                 Ok(Some(other_value)) => {
@@ -155,19 +155,17 @@ fn interpret_base_expr(
                             "Cannot use {} as a condition for an if statement",
                             value_type_to_string(&other_value)
                         ),
-                        row: condition.row,
-                        col_start: condition.col_start,
-                        col_end: condition.col_end,
+                        row,
+                        col_start,
+                        col_end,
                     })
                 }
                 Ok(None) => {
                     return Err(Error::LocationError {
-                        message: format!(
-                            "Cannot use empty as a condition for an if statement"
-                        ),
-                        row: condition.row,
-                        col_start: condition.col_start,
-                        col_end: condition.col_end,
+                        message: format!("Cannot use empty as a condition for an if statement"),
+                        row,
+                        col_start,
+                        col_end,
                     })
                 }
                 Err(e) => return Err(e),
@@ -215,6 +213,10 @@ fn interpret_base_expr(
                 },
             ..
         } => {
+            let row = condition.row;
+            let col_start = condition.col_start;
+            let col_end = condition.col_end;
+
             let condition = match interpret_expr(condition, env, terminal) {
                 Ok(Some(Value::Bool(condition))) => condition,
                 Ok(Some(other_value)) => {
@@ -223,19 +225,17 @@ fn interpret_base_expr(
                             "Cannot use {} as a condition for an if statement",
                             value_type_to_string(&other_value)
                         ),
-                        row: condition.row,
-                        col_start: condition.col_start,
-                        col_end: condition.col_end,
+                        row,
+                        col_start,
+                        col_end,
                     })
                 }
                 Ok(None) => {
                     return Err(Error::LocationError {
-                        message: format!(
-                            "Cannot use empty as a condition for an if statement"
-                        ),
-                        row: condition.row,
-                        col_start: condition.col_start,
-                        col_end: condition.col_end,
+                        message: format!("Cannot use empty as a condition for an if statement"),
+                        row,
+                        col_start,
+                        col_end,
                     })
                 }
                 Err(e) => return Err(e),
@@ -305,17 +305,23 @@ fn interpret_base_expr(
             data: BaseExprData::PlusEqualsStatement { var_name, expr },
             ..
         } => {
+            let row = base_expression.row;
+            let col_start = base_expression.col_start;
+            let col_end = base_expression.col_end;
+
+            let right_side_row = expr.row;
+            let right_side_col_start = expr.col_start;
+            let right_side_col_end = expr.col_end;
+
             let value = match interpret_expr(expr, env, terminal) {
                 Ok(right) => match right {
                     Some(value) => value,
                     None => {
                         return Err(Error::LocationError {
-                            message: format!(
-                                "Cannot assign to empty"
-                            ),
-                            row: expr.row,
-                            col_start: expr.col_start,
-                            col_end: expr.col_end,
+                            message: format!("Cannot assign to empty"),
+                            row,
+                            col_start,
+                            col_end,
                         });
                     }
                 },
@@ -327,28 +333,22 @@ fn interpret_base_expr(
                 None => {
                     return Err(Error::LocationError {
                         message: format!("Variable {} not found", var_name),
-                        row: expr.row,
-                        col_start: expr.col_start,
-                        col_end: expr.col_end,
+                        row,
+                        col_start,
+                        col_end,
                     });
                 }
             };
-
-            let row = base_expression.row;
-            let col_start = base_expression.col_start;
-            let col_end = base_expression.col_end;
 
             let new_value = match add(&Some(current_value), &Some(value), row, col_start, col_end) {
                 Ok(new_value) => match new_value {
                     Some(value) => value,
                     None => {
                         return Err(Error::LocationError {
-                            message: format!(
-                                "Cannot assign to empty"
-                            ),
-                            row: expr.row,
-                            col_start: expr.col_start,
-                            col_end: expr.col_end,
+                            message: format!("Cannot assign to empty"),
+                            row,
+                            col_start,
+                            col_end,
                         });
                     }
                 },
@@ -362,9 +362,9 @@ fn interpret_base_expr(
                 false => {
                     return Err(Error::LocationError {
                         message: format!("Variable {} not found", var_name),
-                        row: expr.row,
-                        col_start: expr.col_start,
-                        col_end: expr.col_end,
+                        row: right_side_row,
+                        col_start: right_side_col_start,
+                        col_end: right_side_col_end,
                     });
                 }
             }
@@ -386,11 +386,7 @@ fn interpret_base_expr(
                 body,
             };
 
-            let scope = env.last_mut().unwrap();
-            scope.push(Binding {
-                name: fun_name,
-                value: function,
-            });
+            update_or_add_in_scope(&function, &fun_name, env.last_mut().unwrap());
 
             return Ok(InterpretationResult::Empty);
         }
@@ -431,6 +427,10 @@ fn interpret_base_expr(
                 },
             ..
         } => {
+            let row = until_expr.row;
+            let col_start = until_expr.col_start;
+            let col_end = until_expr.col_end;
+
             let until = match interpret_expr(until_expr, env, terminal) {
                 Ok(Some(Value::Number(until))) => until,
                 Ok(Some(other_value)) => {
@@ -439,19 +439,17 @@ fn interpret_base_expr(
                             "Cannot use {} as a condition for a for loop",
                             value_type_to_string(&other_value)
                         ),
-                        row: until_expr.row,
-                        col_start: until_expr.col_start,
-                        col_end: until_expr.col_end,
+                        row,
+                        col_start,
+                        col_end,
                     });
                 }
                 Ok(None) => {
                     return Err(Error::LocationError {
-                        message: format!(
-                            "Cannot use empty as a condition for a for loop"
-                        ),
-                        row: until_expr.row,
-                        col_start: until_expr.col_start,
-                        col_end: until_expr.col_end,
+                        message: format!("Cannot use empty as a condition for a for loop"),
+                        row,
+                        col_start,
+                        col_end,
                     });
                 }
                 Err(e) => return Err(e),
@@ -471,9 +469,9 @@ fn interpret_base_expr(
                     false => {
                         return Err(Error::LocationError {
                             message: format!("Variable {} not found", var_name),
-                            row: until_expr.row,
-                            col_start: until_expr.col_start,
-                            col_end: until_expr.col_end,
+                            row,
+                            col_start,
+                            col_end,
                         });
                     }
                 }
@@ -504,7 +502,13 @@ fn interpret_base_expr(
     }
 }
 
-fn add(left: &Option<Value>, right: &Option<Value>, row: usize, col_start: usize, col_end: usize) -> Result<Option<Value>, Error> {
+fn add(
+    left: &Option<Value>,
+    right: &Option<Value>,
+    row: usize,
+    col_start: usize,
+    col_end: usize,
+) -> Result<Option<Value>, Error> {
     match (left, right) {
         (Some(Value::Number(left)), Some(Value::Number(right))) => {
             let result = left + right;
@@ -528,9 +532,7 @@ fn add(left: &Option<Value>, right: &Option<Value>, row: usize, col_start: usize
         }
         _ => {
             return Err(Error::LocationError {
-                message: format!(
-                    "Cannot apply operator + on empty"
-                ),
+                message: format!("Cannot apply operator + on empty"),
                 row,
                 col_start,
                 col_end,
@@ -547,7 +549,14 @@ fn interpret_expr(
     match expr.data {
         RecExprData::Variable { name } => match find_in_env(&name, env) {
             Some(value) => return Ok(Some(value)),
-            None => return Err(format!("Variable not found: {}", name)),
+            None => {
+                return Err(Error::LocationError {
+                    message: format!("Variable not found: {}", name),
+                    row: expr.row,
+                    col_start: expr.col_start,
+                    col_end: expr.col_end,
+                });
+            }
         },
         RecExprData::Number { number } => return Ok(Some(Value::Number(number))),
         RecExprData::Boolean { value } => return Ok(Some(Value::Bool(value))),
@@ -586,13 +595,25 @@ fn interpret_expr(
                     return Ok(Some(Value::Number(result)));
                 }
                 (Some(left_value), Some(right_value)) => {
-                    return Err(format!(
-                        "Cannot apply operator - on types {} and {}",
-                        value_type_to_string(&left_value),
-                        value_type_to_string(&right_value)
-                    ))
+                    return Err(Error::LocationError {
+                        message: format!(
+                            "Cannot apply operator - on types {} and {}",
+                            value_type_to_string(&left_value),
+                            value_type_to_string(&right_value)
+                        ),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
                 }
-                _ => return Err(String::from("Attempted to apply operator - on empty")),
+                _ => {
+                    return Err(Error::LocationError {
+                        message: format!("Cannot apply operator - on empty"),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
             }
         }
         RecExprData::Multiply { left, right } => {
@@ -611,13 +632,25 @@ fn interpret_expr(
                     return Ok(Some(Value::Number(result)));
                 }
                 (Some(left_value), Some(right_value)) => {
-                    return Err(format!(
-                        "Cannot apply operator * on types {} and {}",
-                        value_type_to_string(&left_value),
-                        value_type_to_string(&right_value)
-                    ))
+                    return Err(Error::LocationError {
+                        message: format!(
+                            "Cannot apply operator * on types {} and {}",
+                            value_type_to_string(&left_value),
+                            value_type_to_string(&right_value)
+                        ),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
                 }
-                _ => return Err(String::from("Attempted to apply operator * on empty")),
+                _ => {
+                    return Err(Error::LocationError {
+                        message: format!("Cannot apply operator * on empty"),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
             }
         }
         RecExprData::Divide { left, right } => {
@@ -636,13 +669,25 @@ fn interpret_expr(
                     return Ok(Some(Value::Number(result)));
                 }
                 (Some(left_value), Some(right_value)) => {
-                    return Err(format!(
-                        "Cannot apply operator / on types {} and {}",
-                        value_type_to_string(&left_value),
-                        value_type_to_string(&right_value)
-                    ))
+                    return Err(Error::LocationError {
+                        message: format!(
+                            "Cannot apply operator / on types {} and {}",
+                            value_type_to_string(&left_value),
+                            value_type_to_string(&right_value)
+                        ),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
                 }
-                _ => return Err(String::from("Attempted to apply operator / on empty")),
+                _ => {
+                    return Err(Error::LocationError {
+                        message: format!("Cannot apply operator / on empty"),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
             }
         }
         RecExprData::Power { left, right } => {
@@ -658,20 +703,37 @@ fn interpret_expr(
             match (left_value, right_value) {
                 (Some(Value::Number(left)), Some(Value::Number(right))) => {
                     if right < 0 {
-                        return Err(String::from("Cannot do power with power less than 0"));
+                        return Err(Error::LocationError {
+                            message: format!("Cannot raise to a negative power"),
+                            row: expr.row,
+                            col_start: expr.col_start,
+                            col_end: expr.col_end,
+                        });
                     }
 
                     let result = i32::pow(left, right as u32);
                     return Ok(Some(Value::Number(result)));
                 }
                 (Some(left_value), Some(right_value)) => {
-                    return Err(format!(
-                        "Cannot apply operator ^ on types {} and {}",
-                        value_type_to_string(&left_value),
-                        value_type_to_string(&right_value)
-                    ))
+                    return Err(Error::LocationError {
+                        message: format!(
+                            "Cannot apply operator ^ on types {} and {}",
+                            value_type_to_string(&left_value),
+                            value_type_to_string(&right_value)
+                        ),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
                 }
-                _ => return Err(String::from("Attempted to apply operator ^ on empty")),
+                _ => {
+                    return Err(Error::LocationError {
+                        message: format!("Cannot apply operator ^ on empty"),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
             }
         }
         RecExprData::Minus { right } => {
@@ -686,12 +748,24 @@ fn interpret_expr(
                     return Ok(Some(Value::Number(result)));
                 }
                 Some(value) => {
-                    return Err(format!(
-                        "Cannot apply operator - on type {}",
-                        value_type_to_string(&value)
-                    ))
+                    return Err(Error::LocationError {
+                        message: format!(
+                            "Cannot apply operator - on type {}",
+                            value_type_to_string(&value)
+                        ),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
                 }
-                _ => return Err(String::from("Attempted to apply operator - on empty")),
+                _ => {
+                    return Err(Error::LocationError {
+                        message: format!("Cannot apply operator - on empty"),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
             }
         }
 
@@ -719,13 +793,25 @@ fn interpret_expr(
                     return Ok(Some(Value::Bool(result)));
                 }
                 (Some(left_value), Some(right_value)) => {
-                    return Err(format!(
-                        "Cannot apply operator == on types {} and {}",
-                        value_type_to_string(&left_value),
-                        value_type_to_string(&right_value)
-                    ))
+                    return Err(Error::LocationError {
+                        message: format!(
+                            "Cannot apply operator == on types {} and {}",
+                            value_type_to_string(&left_value),
+                            value_type_to_string(&right_value)
+                        ),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
                 }
-                _ => return Err(String::from("Attempted to apply operator == on empty")),
+                _ => {
+                    return Err(Error::LocationError {
+                        message: format!("Cannot apply operator == on empty"),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
             }
         }
 
@@ -746,13 +832,25 @@ fn interpret_expr(
                     return Ok(Some(Value::Bool(result)));
                 }
                 (Some(left_value), Some(right_value)) => {
-                    return Err(format!(
-                        "Cannot apply operator AND on types {} and {}",
-                        value_type_to_string(&left_value),
-                        value_type_to_string(&right_value)
-                    ))
+                    return Err(Error::LocationError {
+                        message: format!(
+                            "Cannot apply operator AND on types {} and {}",
+                            value_type_to_string(&left_value),
+                            value_type_to_string(&right_value)
+                        ),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
                 }
-                _ => return Err(String::from("Attempted to apply operator AND on empty")),
+                _ => {
+                    return Err(Error::LocationError {
+                        message: format!("Cannot apply operator AND on empty"),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
             }
         }
         RecExprData::Or { left, right } => {
@@ -771,13 +869,25 @@ fn interpret_expr(
                     return Ok(Some(Value::Bool(result)));
                 }
                 (Some(left_value), Some(right_value)) => {
-                    return Err(format!(
-                        "Cannot apply operator OR on types {} and {}",
-                        value_type_to_string(&left_value),
-                        value_type_to_string(&right_value)
-                    ))
+                    return Err(Error::LocationError {
+                        message: format!(
+                            "Cannot apply operator OR on types {} and {}",
+                            value_type_to_string(&left_value),
+                            value_type_to_string(&right_value)
+                        ),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
                 }
-                _ => return Err(String::from("Attempted to apply operator OR on empty")),
+                _ => {
+                    return Err(Error::LocationError {
+                        message: format!("Cannot apply operator OR on empty"),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
             }
         }
 
@@ -788,18 +898,34 @@ fn interpret_expr(
             let env_variable = match find_in_env(&function_name, env) {
                 Some(env_variable) => env_variable,
                 None => {
-                    return Err(format!("Variable {} not found", function_name));
+                    return Err(Error::LocationError {
+                        message: format!("Function {} not found", function_name),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
                 }
             };
 
             // We also need all values that we will pass
             let mut arg_values = Vec::new();
             for arg in args {
+                let row = arg.row;
+                let col_start = arg.col_start;
+                let col_end = arg.col_end;
+
                 match interpret_expr(arg, env, terminal) {
                     Ok(Some(value)) => {
                         arg_values.push(value);
                     }
-                    Ok(None) => return Err(String::from("Attempted to pass Empty to a function")),
+                    Ok(None) => {
+                        return Err(Error::LocationError {
+                            message: format!("Cannot pass Empty to a function"),
+                            row,
+                            col_start,
+                            col_end,
+                        });
+                    }
                     Err(e) => return Err(e),
                 }
             }
@@ -810,11 +936,16 @@ fn interpret_expr(
                     let mut function_scope: Scope = Vec::new();
 
                     if args.len() != arg_values.len() {
-                        return Err(format!(
-                            "Expected {} arguments, but got {}",
-                            args.len(),
-                            arg_values.len()
-                        ));
+                        return Err(Error::LocationError {
+                            message: format!(
+                                "Expected {} arguments, but got {}",
+                                args.len(),
+                                arg_values.len()
+                            ),
+                            row: expr.row,
+                            col_start: expr.col_start,
+                            col_end: expr.col_end,
+                        });
                     }
 
                     for (name, value) in args.iter().zip(arg_values.iter()) {
@@ -829,6 +960,10 @@ fn interpret_expr(
 
                     // Run all sub statements
                     for base_expression in body {
+                        let row = base_expression.row;
+                        let col_start = base_expression.col_start;
+                        let col_end = base_expression.col_end;
+
                         let interp_result =
                             match interpret_base_expr(base_expression, env, terminal) {
                                 Ok(result) => result,
@@ -842,7 +977,12 @@ fn interpret_expr(
                                 return Ok(return_value);
                             }
                             InterpretationResult::Break => {
-                                return Err(String::from("Cannot break out of a funcion"));
+                                return Err(Error::LocationError {
+                                    message: format!("Cannot break out of a function"),
+                                    row,
+                                    col_start,
+                                    col_end,
+                                });
                             }
                             InterpretationResult::Empty => {}
                         }
@@ -876,11 +1016,16 @@ fn interpret_expr(
                     return Ok(None);
                 }
                 other => {
-                    return Err(format!(
-                        "Expected function, found {} for variable {}",
-                        value_type_to_string(&other),
-                        function_name
-                    ));
+                    return Err(Error::LocationError {
+                        message: format!(
+                            "Expected function, found {} for variable {}",
+                            value_type_to_string(&other),
+                            function_name
+                        ),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
                 }
             }
         }
@@ -892,7 +1037,14 @@ fn interpret_expr(
             let value = match interpret_expr(*right, env, terminal) {
                 Ok(right) => match right {
                     Some(value) => value,
-                    None => return Err(String::from("Cannot assign to empty")),
+                    None => {
+                        return Err(Error::LocationError {
+                            message: format!("Cannot assign to empty"),
+                            row: expr.row,
+                            col_start: expr.col_start,
+                            col_end: expr.col_end,
+                        });
+                    }
                 },
                 Err(e) => return Err(e),
             };
@@ -907,7 +1059,11 @@ fn interpret_expr(
             return Ok(None);
         }
 
-        RecExprData::Access { object, variable } => return Err(String::from("Not implemented")),
+        RecExprData::Access { object, variable } => {
+            return Err(Error::SimpleError {
+                message: format!("not implemented"),
+            });
+        }
     }
 }
 
@@ -928,6 +1084,17 @@ fn update_in_scope(value: &Value, name: &String, scope: &mut Scope) -> bool {
         }
     }
     return false;
+}
+
+fn update_or_add_in_scope(value: &Value, name: &String, scope: &mut Scope) {
+    if update_in_scope(value, name, scope) {
+        return;
+    }
+
+    scope.push(Binding {
+        name: name.clone(),
+        value: value.clone(),
+    });
 }
 
 fn find_in_env(name: &String, env: &Environment) -> Option<Value> {

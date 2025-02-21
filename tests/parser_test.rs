@@ -1,13 +1,19 @@
 use rosy::parser::{self, BaseExpr, BaseExprData, RecExpr, RecExprData};
+use rosy::pipeline::print_error;
+use rosy::tokenizer::Error;
 
-fn compare(actual: Result<Vec<BaseExpr>, String>, expected: Vec<BaseExpr>) {
+fn compare(actual: Result<Vec<BaseExpr>, Error>, expected: Vec<BaseExpr>, program: &Vec<&str>) {
     match actual {
         Ok(tokens) => assert_eq!(tokens, expected),
-        Err(e) => panic!("{}", e),
+        Err(e) => print_error(&e, program),
     }
 }
 
-fn compare_linewise(actual: Result<Vec<BaseExpr>, String>, expected: Vec<BaseExpr>) {
+fn compare_linewise(
+    actual: Result<Vec<BaseExpr>, Error>,
+    expected: Vec<BaseExpr>,
+    program: &Vec<&str>,
+) {
     match actual {
         Ok(tokens) => {
             if tokens.len() != expected.len() {
@@ -24,7 +30,7 @@ fn compare_linewise(actual: Result<Vec<BaseExpr>, String>, expected: Vec<BaseExp
                 assert_eq!(act, exp);
             }
         }
-        Err(e) => panic!("{}", e),
+        Err(e) => print_error(&e, program),
     }
 }
 
@@ -36,6 +42,7 @@ fn simple_variable() {
         "long_variable",
         "var"
     ]);
+    let program_copy = program.clone();
     let expressions = parser::parse_strings(program);
     let expected = Vec::from([
         BaseExpr {
@@ -85,7 +92,7 @@ fn simple_variable() {
         },
     ]);
 
-    compare_linewise(expressions, expected);
+    compare_linewise(expressions, expected, &program_copy);
 }
 
 #[test]
@@ -97,6 +104,7 @@ fn simple_integer() {
         "12",
         "234589374"
     ]);
+    let program_copy = program.clone();
     let expressions = parser::parse_strings(program);
     let expected = Vec::from([
         BaseExpr {
@@ -153,7 +161,7 @@ fn simple_integer() {
         },
     ]);
 
-    compare_linewise(expressions, expected);
+    compare_linewise(expressions, expected, &program_copy);
 }
 
 #[test]
@@ -163,6 +171,7 @@ fn simple_boolean() {
         "true",
         "false",
     ]);
+    let program_copy = program.clone();
     let expressions = parser::parse_strings(program);
     let expected = Vec::from([
         BaseExpr {
@@ -193,7 +202,7 @@ fn simple_boolean() {
         },
     ]);
 
-    compare_linewise(expressions, expected);
+    compare_linewise(expressions, expected, &program_copy);
 }
 
 #[test]
@@ -203,6 +212,7 @@ fn simple_string() {
         "\"blah\"",
         "\"fun in for loop  { } () (*)^)*& _+-=    spaces\"",
     ]);
+    let program_copy = program.clone();
     let expressions = parser::parse_strings(program);
     let expected = Vec::from([
         BaseExpr {
@@ -237,7 +247,7 @@ fn simple_string() {
         },
     ]);
 
-    compare_linewise(expressions, expected);
+    compare_linewise(expressions, expected, &program_copy);
 }
 
 #[test]
@@ -246,6 +256,7 @@ fn order_of_operations_test() {
     let program = Vec::from([
         "1 + 2 - 3",
     ]);
+    let program_copy = program.clone();
     let expressions = parser::parse_strings(program);
     let expected = Vec::from([BaseExpr {
         data: BaseExprData::Simple {
@@ -287,7 +298,7 @@ fn order_of_operations_test() {
         col_end: 9,
     }]);
 
-    compare_linewise(expressions, expected);
+    compare_linewise(expressions, expected, &program_copy);
 }
 
 #[test]
@@ -304,6 +315,7 @@ fn simple_arithmetic() {
         "12 * (3 + 4)",
         "12 * (3 + (4 / 2)) - 5 / (6 ^ 7) + 8",
     ]);
+    let program_copy = program.clone();
     let expressions = parser::parse_strings(program);
     let expected = Vec::from([
         BaseExpr {
@@ -646,7 +658,7 @@ fn simple_arithmetic() {
         },
     ]);
 
-    compare_linewise(expressions, expected);
+    compare_linewise(expressions, expected, &program_copy);
 }
 
 #[test]
@@ -659,6 +671,7 @@ fn variable_assignment_test() {
         "a1_b2 = (25 * 2)",
         "a1_b2 = \"string\"",
     ]);
+    let program_copy = program.clone();
     let expressions = parser::parse_strings(program);
     let expected = Vec::from([
         BaseExpr {
@@ -761,7 +774,7 @@ fn variable_assignment_test() {
         },
     ]);
 
-    compare_linewise(expressions, expected);
+    compare_linewise(expressions, expected, &program_copy);
 }
 /*
 #[test]
@@ -1010,7 +1023,7 @@ fn boolean_expressions_test() {
         },
     ]);
 
-    compare_linewise(expressions, expected);
+    compare_linewise(expressions, expected, &program_copy);
 }
 
 #[test]

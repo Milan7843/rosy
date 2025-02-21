@@ -63,8 +63,6 @@ struct Cli {
 pub fn main() {
     let args = Cli::parse();
 
-    println!("path: {:?}", args.path);
-
     match pipeline::run_pipeline_from_path(&args.path) {
         Ok(terminal) => {}
         Err(err) => println!("{err}"),

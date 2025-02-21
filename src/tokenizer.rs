@@ -238,7 +238,6 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, Error> {
             continue;
         }
         line_cleaned = line_cleaned.replace("\t", "    ");
-        println!("cleaned line: {line_cleaned:?}");
         cleaned_lines.push(line_cleaned);
         line_indices.push(line_index);
     }
@@ -506,7 +505,6 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, Error> {
         token_lines.push(token_line);
     }
 
-    print_token_lines(&token_lines);
     return Ok(token_lines);
 }
 

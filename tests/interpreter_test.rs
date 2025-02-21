@@ -4,12 +4,13 @@ use rosy::{
     parser::BaseExprData,
     parser::RecExpr,
     parser::RecExprData,
+    tokenizer::Error,
 };
 
-fn compare(actual: Result<Terminal, String>, expected: Terminal) {
+fn compare(actual: Result<Terminal, Error>, expected: Terminal) {
     match actual {
         Ok(tokens) => assert_eq!(tokens, expected),
-        Err(e) => panic!("{}", e),
+        Err(_) => panic!(" error "),
     }
 }
 

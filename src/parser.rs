@@ -729,6 +729,9 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
             })
         }
 
+        [first, .., last] => {
+            return Err(Error::LocationError { message: format!("No expression found"), row: first.row, col_start: first.col_start, col_end: last.col_end })
+        }
         [first, ..] => {
             return Err(Error::LocationError { message: format!("No expression found"), row: first.row, col_start: first.col_start, col_end: first.col_end })
         }
@@ -783,6 +786,12 @@ fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token])
             }
 
             let mut parenthesis_depth = 1;
+            match line[0].data {
+                TokenData::Symbol {
+                    symbol_type: SymbolType::ParenthesisOpen,
+                } => parenthesis_depth += 1,
+                _ => {}
+            }
             for i in 1..line.len() {
                 match line[i].data {
                     TokenData::Symbol {

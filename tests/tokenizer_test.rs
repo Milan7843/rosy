@@ -1,17 +1,18 @@
 use rosy::tokenizer;
+use tokenizer::Error;
 use tokenizer::SymbolType;
 use tokenizer::Token;
 use tokenizer::TokenData;
 use tokenizer::TokenLine;
 
-fn compare(actual: Result<Vec<TokenLine>, String>, expected: Vec<TokenLine>) {
+fn compare(actual: Result<Vec<TokenLine>, Error>, expected: Vec<TokenLine>) {
     match actual {
         Ok(tokens) => assert_eq!(tokens, expected),
-        Err(e) => panic!("{}", e),
+        Err(_) => panic!("error"),
     }
 }
 
-fn compare_linewise(actual: Result<Vec<TokenLine>, String>, expected: Vec<TokenLine>) {
+fn compare_linewise(actual: Result<Vec<TokenLine>, Error>, expected: Vec<TokenLine>) {
     match actual {
         Ok(tokens) => {
             if tokens.len() != expected.len() {
@@ -28,7 +29,7 @@ fn compare_linewise(actual: Result<Vec<TokenLine>, String>, expected: Vec<TokenL
                 assert_eq!(act, exp);
             }
         }
-        Err(e) => panic!("{}", e),
+        Err(_) => panic!("error"),
     }
 }
 
