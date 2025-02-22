@@ -88,7 +88,7 @@ pub fn interpret(base_expressions: Vec<BaseExpr>) -> Result<Terminal, Error> {
 
     terminal.push(String::new());
 
-    for base_expression in base_expressions {
+    for base_expression in &base_expressions {
         match interpret_base_expr(base_expression, &mut env, &mut terminal) {
             Ok(_) => {}
             Err(e) => return Err(e),
@@ -99,7 +99,7 @@ pub fn interpret(base_expressions: Vec<BaseExpr>) -> Result<Terminal, Error> {
 }
 
 fn interpret_base_expr(
-    base_expression: BaseExpr,
+    base_expression: &BaseExpr,
     env: &mut Environment,
     terminal: &mut Terminal,
 ) -> Result<InterpretationResult, Error> {
@@ -174,11 +174,11 @@ fn interpret_base_expr(
             // If the condition is false, use the else option
             if !condition {
                 let else_statement_real = match else_statement {
-                    Some(expr) => *expr,
+                    Some(expr) => expr,
                     None => return Ok(InterpretationResult::Empty),
                 };
 
-                return interpret_base_expr(else_statement_real, env, terminal);
+                return interpret_base_expr(&*else_statement_real, env, terminal);
             }
 
             for base_expression in body {
@@ -244,11 +244,11 @@ fn interpret_base_expr(
             // If the condition is false, use the else option
             if !condition {
                 let else_statement_real = match else_statement {
-                    Some(expr) => *expr,
+                    Some(expr) => expr,
                     None => return Ok(InterpretationResult::Empty),
                 };
 
-                return interpret_base_expr(else_statement_real, env, terminal);
+                return interpret_base_expr(&*else_statement_real, env, terminal);
             }
 
             for base_expression in body {
@@ -382,8 +382,8 @@ fn interpret_base_expr(
         } => {
             let function = Value::Function {
                 name: fun_name.clone(),
-                args,
-                body,
+                args: args.clone(),
+                body: body.clone(),
             };
 
             update_or_add_in_scope(&function, &fun_name, env.last_mut().unwrap());
@@ -455,12 +455,7 @@ fn interpret_base_expr(
                 Err(e) => return Err(e),
             };
 
-            let scope = env.last_mut().unwrap();
-
-            scope.push(Binding {
-                name: var_name.clone(),
-                value: Value::Number(0),
-            });
+            update_or_add_in_scope(&Value::Number(0), var_name, env.last_mut().unwrap());
 
             for i in 0..until {
                 let scope = env.last_mut().unwrap();
@@ -477,7 +472,7 @@ fn interpret_base_expr(
                 }
                 
                 for base_expression in body.iter() {
-                    let interp_result = match interpret_base_expr(base_expression, env) {
+                    let interp_result = match interpret_base_expr(base_expression, env, terminal) {
                         Ok(result) => result,
                         Err(e) => return Err(e),
                     };
@@ -541,11 +536,11 @@ fn add(
 }
 
 fn interpret_expr(
-    expr: RecExpr,
+    expr: &RecExpr,
     env: &mut Environment,
     terminal: &mut Terminal,
 ) -> Result<Option<Value>, Error> {
-    match expr.data {
+    match &expr.data {
         RecExprData::Variable { name } => match find_in_env(&name, env) {
             Some(value) => return Ok(Some(value)),
             None => {
@@ -557,17 +552,17 @@ fn interpret_expr(
                 });
             }
         },
-        RecExprData::Number { number } => return Ok(Some(Value::Number(number))),
-        RecExprData::Boolean { value } => return Ok(Some(Value::Bool(value))),
-        RecExprData::String { value } => return Ok(Some(Value::String(value))),
+        RecExprData::Number { number } => return Ok(Some(Value::Number(*number))),
+        RecExprData::Boolean { value } => return Ok(Some(Value::Bool(*value))),
+        RecExprData::String { value } => return Ok(Some(Value::String(value.clone()))),
 
         // Arithmetic
         RecExprData::Add { left, right } => {
-            let left_value = match interpret_expr(*left, env, terminal) {
+            let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env, terminal) {
+            let right_value = match interpret_expr(&*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -579,11 +574,11 @@ fn interpret_expr(
             return add(&left_value, &right_value, row, col_start, col_end);
         }
         RecExprData::Subtract { left, right } => {
-            let left_value = match interpret_expr(*left, env, terminal) {
+            let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env, terminal) {
+            let right_value = match interpret_expr(&*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -616,11 +611,11 @@ fn interpret_expr(
             }
         }
         RecExprData::Multiply { left, right } => {
-            let left_value = match interpret_expr(*left, env, terminal) {
+            let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env, terminal) {
+            let right_value = match interpret_expr(&*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -653,11 +648,11 @@ fn interpret_expr(
             }
         }
         RecExprData::Divide { left, right } => {
-            let left_value = match interpret_expr(*left, env, terminal) {
+            let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env, terminal) {
+            let right_value = match interpret_expr(&*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -690,11 +685,11 @@ fn interpret_expr(
             }
         }
         RecExprData::Power { left, right } => {
-            let left_value = match interpret_expr(*left, env, terminal) {
+            let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env, terminal) {
+            let right_value = match interpret_expr(&*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -736,7 +731,7 @@ fn interpret_expr(
             }
         }
         RecExprData::Minus { right } => {
-            let right_value = match interpret_expr(*right, env, terminal) {
+            let right_value = match interpret_expr(&*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -769,11 +764,11 @@ fn interpret_expr(
         }
 
         RecExprData::Equals { left, right } => {
-            let left_value = match interpret_expr(*left, env, terminal) {
+            let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env, terminal) {
+            let right_value = match interpret_expr(&*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -816,11 +811,11 @@ fn interpret_expr(
 
         // Boolean operators
         RecExprData::And { left, right } => {
-            let left_value = match interpret_expr(*left, env, terminal) {
+            let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env, terminal) {
+            let right_value = match interpret_expr(&*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -853,11 +848,11 @@ fn interpret_expr(
             }
         }
         RecExprData::Or { left, right } => {
-            let left_value = match interpret_expr(*left, env, terminal) {
+            let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
                 Err(e) => return Err(e),
             };
-            let right_value = match interpret_expr(*right, env, terminal) {
+            let right_value = match interpret_expr(&*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -890,7 +885,7 @@ fn interpret_expr(
             }
         }
         RecExprData::Not { right } => {
-            let right_value = match interpret_expr(*right, env, terminal) {
+            let right_value = match interpret_expr(&*right, env, terminal) {
                 Ok(right_value) => right_value,
                 Err(e) => return Err(e),
             };
@@ -945,7 +940,7 @@ fn interpret_expr(
                 let col_start = arg.col_start;
                 let col_end = arg.col_end;
 
-                match interpret_expr(arg, env, terminal) {
+                match interpret_expr(&arg, env, terminal) {
                     Ok(Some(value)) => {
                         arg_values.push(value);
                     }
@@ -996,7 +991,7 @@ fn interpret_expr(
                         let col_end = base_expression.col_end;
 
                         let interp_result =
-                            match interpret_base_expr(base_expression, env, terminal) {
+                            match interpret_base_expr(&base_expression, env, terminal) {
                                 Ok(result) => result,
                                 Err(e) => return Err(e),
                             };
@@ -1065,7 +1060,7 @@ fn interpret_expr(
             variable_name,
             right,
         } => {
-            let value = match interpret_expr(*right, env, terminal) {
+            let value = match interpret_expr(&*right, env, terminal) {
                 Ok(right) => match right {
                     Some(value) => value,
                     None => {
@@ -1083,7 +1078,7 @@ fn interpret_expr(
             // Now we add this value to the scope
             let scope = env.last_mut().unwrap();
             scope.push(Binding {
-                name: variable_name,
+                name: variable_name.clone(),
                 value: value,
             });
 

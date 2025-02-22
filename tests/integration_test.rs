@@ -394,3 +394,26 @@ fn if_statements_test() {
 
     compare(actual, str_to_string(expected));
 }
+
+#[test]
+fn for_loop_test() {
+    #[rustfmt::skip]
+    let program = Vec::from([
+        "for i in 5",
+        "    println(i)",
+    ]);
+
+    let actual = pipeline::run_pipeline(program);
+
+    #[rustfmt::skip]
+    let expected = Vec::from([
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "",
+    ]);
+
+    compare(actual, str_to_string(expected));
+}
