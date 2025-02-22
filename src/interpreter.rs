@@ -786,17 +786,9 @@ fn interpret_expr(
                     let result = left == right;
                     return Ok(Some(Value::Bool(result)));
                 }
-                (Some(left_value), Some(right_value)) => {
-                    return Err(Error::LocationError {
-                        message: format!(
-                            "Cannot apply operator == on types {} and {}",
-                            value_type_to_string(&left_value),
-                            value_type_to_string(&right_value)
-                        ),
-                        row: expr.row,
-                        col_start: expr.col_start,
-                        col_end: expr.col_end,
-                    });
+                (Some(_), Some(_)) => {
+                    // If the types are different, they are not equal
+                    return Ok(Some(Value::Bool(false)));
                 }
                 _ => {
                     return Err(Error::LocationError {
@@ -808,6 +800,201 @@ fn interpret_expr(
                 }
             }
         }
+        
+        RecExprData::NotEquals { left, right } => {
+            let left_value = match interpret_expr(&*left, env, terminal) {
+                Ok(left_value) => left_value,
+                Err(e) => return Err(e),
+            };
+            let right_value = match interpret_expr(&*right, env, terminal) {
+                Ok(right_value) => right_value,
+                Err(e) => return Err(e),
+            };
+
+            match (left_value, right_value) {
+                (Some(Value::Number(left)), Some(Value::Number(right))) => {
+                    let result = left != right;
+                    return Ok(Some(Value::Bool(result)));
+                }
+                (Some(Value::Bool(left)), Some(Value::Bool(right))) => {
+                    let result = left != right;
+                    return Ok(Some(Value::Bool(result)));
+                }
+                (Some(Value::String(left)), Some(Value::String(right))) => {
+                    let result = left != right;
+                    return Ok(Some(Value::Bool(result)));
+                }
+                (Some(_), Some(_)) => {
+                    // If the types are different, they are not equal
+                    return Ok(Some(Value::Bool(true)));
+                }
+                _ => {
+                    return Err(Error::LocationError {
+                        message: format!("Cannot apply operator != on empty"),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
+            }
+        }
+        
+        
+        RecExprData::GreaterThan { left, right } => {
+            let left_value = match interpret_expr(&*left, env, terminal) {
+                Ok(left_value) => left_value,
+                Err(e) => return Err(e),
+            };
+            let right_value = match interpret_expr(&*right, env, terminal) {
+                Ok(right_value) => right_value,
+                Err(e) => return Err(e),
+            };
+
+            match (left_value, right_value) {
+                (Some(Value::Number(left)), Some(Value::Number(right))) => {
+                    let result = left > right;
+                    return Ok(Some(Value::Bool(result)));
+                }
+                (Some(left_value), Some(right_value)) => {
+                    return Err(Error::LocationError {
+                        message: format!(
+                            "Cannot apply operator > on types {} and {}",
+                            value_type_to_string(&left_value),
+                            value_type_to_string(&right_value)
+                        ),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
+                _ => {
+                    return Err(Error::LocationError {
+                        message: format!("Cannot apply operator > on empty"),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
+            }
+        }
+
+        RecExprData::GreaterThanOrEqual { left, right } => {
+            let left_value = match interpret_expr(&*left, env, terminal) {
+                Ok(left_value) => left_value,
+                Err(e) => return Err(e),
+            };
+            let right_value = match interpret_expr(&*right, env, terminal) {
+                Ok(right_value) => right_value,
+                Err(e) => return Err(e),
+            };
+
+            match (left_value, right_value) {
+                (Some(Value::Number(left)), Some(Value::Number(right))) => {
+                    let result = left >= right;
+                    return Ok(Some(Value::Bool(result)));
+                }
+                (Some(left_value), Some(right_value)) => {
+                    return Err(Error::LocationError {
+                        message: format!(
+                            "Cannot apply operator >= on types {} and {}",
+                            value_type_to_string(&left_value),
+                            value_type_to_string(&right_value)
+                        ),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
+                _ => {
+                    return Err(Error::LocationError {
+                        message: format!("Cannot apply operator >= on empty"),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
+            }
+        }
+
+        // less than
+        RecExprData::LessThan { left, right } => {
+            let left_value = match interpret_expr(&*left, env, terminal) {
+                Ok(left_value) => left_value,
+                Err(e) => return Err(e),
+            };
+            let right_value = match interpret_expr(&*right, env, terminal) {
+                Ok(right_value) => right_value,
+                Err(e) => return Err(e),
+            };
+
+            match (left_value, right_value) {
+                (Some(Value::Number(left)), Some(Value::Number(right))) => {
+                    let result = left < right;
+                    return Ok(Some(Value::Bool(result)));
+                }
+                (Some(left_value), Some(right_value)) => {
+                    return Err(Error::LocationError {
+                        message: format!(
+                            "Cannot apply operator < on types {} and {}",
+                            value_type_to_string(&left_value),
+                            value_type_to_string(&right_value)
+                        ),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
+                _ => {
+                    return Err(Error::LocationError {
+                        message: format!("Cannot apply operator < on empty"),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
+            }
+        }
+
+        // less than or equal
+        RecExprData::LessThanOrEqual { left, right } => {
+            let left_value = match interpret_expr(&*left, env, terminal) {
+                Ok(left_value) => left_value,
+                Err(e) => return Err(e),
+            };
+            let right_value = match interpret_expr(&*right, env, terminal) {
+                Ok(right_value) => right_value,
+                Err(e) => return Err(e),
+            };
+
+            match (left_value, right_value) {
+                (Some(Value::Number(left)), Some(Value::Number(right))) => {
+                    let result = left <= right;
+                    return Ok(Some(Value::Bool(result)));
+                }
+                (Some(left_value), Some(right_value)) => {
+                    return Err(Error::LocationError {
+                        message: format!(
+                            "Cannot apply operator <= on types {} and {}",
+                            value_type_to_string(&left_value),
+                            value_type_to_string(&right_value)
+                        ),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
+                _ => {
+                    return Err(Error::LocationError {
+                        message: format!("Cannot apply operator <= on empty"),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
+            }
+        }
+
+
 
         // Boolean operators
         RecExprData::And { left, right } => {

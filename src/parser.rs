@@ -120,6 +120,26 @@ pub enum RecExprData {
         left: Box<RecExpr>,
         right: Box<RecExpr>,
     },
+    NotEquals {
+        left: Box<RecExpr>,
+        right: Box<RecExpr>,
+    },
+    GreaterThan {
+        left: Box<RecExpr>,
+        right: Box<RecExpr>,
+    },
+    LessThan {
+        left: Box<RecExpr>,
+        right: Box<RecExpr>,
+    },
+    GreaterThanOrEqual {
+        left: Box<RecExpr>,
+        right: Box<RecExpr>,
+    },
+    LessThanOrEqual {
+        left: Box<RecExpr>,
+        right: Box<RecExpr>,
+    },
     Access {
         object: String,
         variable: String,
@@ -271,7 +291,13 @@ fn get_last_occurence(
                         }
                         | TokenData::Symbol {
                             symbol_type: SymbolType::EqualsEquals,
-                        } => continue,
+                        }
+                        | TokenData::Symbol { symbol_type: SymbolType::NotEquals }
+                        | TokenData::Symbol { symbol_type: SymbolType::GreaterThan }
+                        | TokenData::Symbol { symbol_type: SymbolType::LessThan }
+                        | TokenData::Symbol { symbol_type: SymbolType::GreaterThanOrEqual }
+                        | TokenData::Symbol { symbol_type: SymbolType::LessThanOrEqual }
+                         => continue,
                         _ => return Ok((symbol_type.clone(), i)),
                     }
                 }
@@ -438,6 +464,72 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     (_, Err(e)) => return Err(e),
                 }
             }
+            SymbolType::NotEquals => {
+                match (
+                    generic_expression_to_recursive_expression(*left_operand),
+                    generic_expression_to_recursive_expression(*right_operand),
+                ) {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::NotEquals {
+                        left: Box::new(left_expr),
+                        right: Box::new(right_expr),
+                    },
+                    (Err(e), _) => return Err(e),
+                    (_, Err(e)) => return Err(e),
+                }
+            }
+            SymbolType::GreaterThan => {
+                match (
+                    generic_expression_to_recursive_expression(*left_operand),
+                    generic_expression_to_recursive_expression(*right_operand),
+                ) {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::GreaterThan {
+                        left: Box::new(left_expr),
+                        right: Box::new(right_expr),
+                    },
+                    (Err(e), _) => return Err(e),
+                    (_, Err(e)) => return Err(e),
+                }
+            }
+            SymbolType::GreaterThanOrEqual => {
+                match (
+                    generic_expression_to_recursive_expression(*left_operand),
+                    generic_expression_to_recursive_expression(*right_operand),
+                ) {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::GreaterThanOrEqual {
+                        left: Box::new(left_expr),
+                        right: Box::new(right_expr),
+                    },
+                    (Err(e), _) => return Err(e),
+                    (_, Err(e)) => return Err(e),
+                }
+            }
+            SymbolType::LessThan => {
+                match (
+                    generic_expression_to_recursive_expression(*left_operand),
+                    generic_expression_to_recursive_expression(*right_operand),
+                ) {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::LessThan {
+                        left: Box::new(left_expr),
+                        right: Box::new(right_expr),
+                    },
+                    (Err(e), _) => return Err(e),
+                    (_, Err(e)) => return Err(e),
+                }
+            }
+            SymbolType::LessThanOrEqual => {
+                match (
+                    generic_expression_to_recursive_expression(*left_operand),
+                    generic_expression_to_recursive_expression(*right_operand),
+                ) {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::LessThanOrEqual {
+                        left: Box::new(left_expr),
+                        right: Box::new(right_expr),
+                    },
+                    (Err(e), _) => return Err(e),
+                    (_, Err(e)) => return Err(e),
+                }
+            }
+
             _ => {
                 return Err(Error::LocationError {
                     message: format!(
@@ -481,12 +573,13 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
     //let mut token_vec = Vec::from(tokens);
     //let root_token = parenthesize(&mut token_vec);
 
-    let precedence_one = Vec::from([SymbolType::Plus, SymbolType::Minus]);
-    let precedence_two = Vec::from([SymbolType::Star, SymbolType::Slash]);
-    let precedence_three = Vec::from([SymbolType::Hat]);
-    let precedence_four = Vec::from([SymbolType::EqualsEquals]);
-    let precedence_five = Vec::from([SymbolType::Or]);
-    let precedence_six = Vec::from([SymbolType::And]);
+    let precedence_one = Vec::from([SymbolType::Or]);
+    let precedence_two = Vec::from([SymbolType::And]);
+    let precedence_three = Vec::from([SymbolType::EqualsEquals, SymbolType::NotEquals]);
+    let precedence_four = Vec::from([SymbolType::GreaterThan, SymbolType::LessThan, SymbolType::GreaterThanOrEqual, SymbolType::LessThanOrEqual]);
+    let precedence_five = Vec::from([SymbolType::Plus, SymbolType::Minus]);
+    let precedence_six = Vec::from([SymbolType::Star, SymbolType::Slash]);
+    let precedence_seven = Vec::from([SymbolType::Hat]);
 
     // Looking for the first lowest precedence operators
     if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_one) {
@@ -540,6 +633,7 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
         }
     }
 
+    
     // Looking for the third lowest precedence operators
     if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_three) {
         let left = get_generic_expression(&tokens[0..index]);
@@ -564,6 +658,37 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
             (Err(e), _) => return Err(e),
             (_, Err(e)) => return Err(e),
         }
+    }
+
+
+    match tokens {
+        [Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::Not,
+                },
+            row: row_not,
+            col_start: col_start_not,
+            ..
+        }, rest @ ..] => {
+            // not statement detected
+            match get_generic_expression(&rest) {
+                Ok(expr) => {
+                    let expr_col_end = expr.col_end;
+                    return Ok(GenExpr {
+                        data: GenExprData::UnaryOp {
+                            operator: SymbolType::Not,
+                            operand: Box::new(expr),
+                        },
+                        row: *row_not,
+                        col_start: *col_start_not,
+                        col_end: expr_col_end,
+                    })
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        _ => {}
     }
 
     // Looking for the fourth lowest precedence operators
@@ -620,6 +745,33 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
 
     // Looking for the sixth lowest precedence operators
     if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_six) {
+        let left = get_generic_expression(&tokens[0..index]);
+        let right = get_generic_expression(&tokens[index + 1..]);
+
+        match (left, right) {
+            (Ok(left_expr), Ok(right_expr)) => {
+                let row = left_expr.row;
+                let col_start = left_expr.col_start;
+                let col_end = right_expr.col_end;
+                return Ok(GenExpr {
+                    data: GenExprData::BinaryOp {
+                        left_operand: Box::new(left_expr),
+                        operator: symbol_type,
+                        right_operand: Box::new(right_expr),
+                    },
+                    row,
+                    col_start,
+                    col_end,
+                });
+            }
+            (Err(e), _) => return Err(e),
+            (_, Err(e)) => return Err(e),
+        }
+    }
+
+    
+    // Looking for the seventh lowest precedence operators
+    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_seven) {
         let left = get_generic_expression(&tokens[0..index]);
         let right = get_generic_expression(&tokens[index + 1..]);
 
@@ -1727,6 +1879,41 @@ fn print_recursive_expression(expression: &RecExpr) {
             print!("(");
             print_recursive_expression(&*left);
             print!(" == ");
+            print_recursive_expression(&*right);
+            print!(")");
+        }
+        RecExprData::NotEquals { left, right } => {
+            print!("(");
+            print_recursive_expression(&*left);
+            print!(" != ");
+            print_recursive_expression(&*right);
+            print!(")");
+        }
+        RecExprData::LessThan { left, right } => {
+            print!("(");
+            print_recursive_expression(&*left);
+            print!(" < ");
+            print_recursive_expression(&*right);
+            print!(")");
+        }
+        RecExprData::LessThanOrEqual { left, right } => {
+            print!("(");
+            print_recursive_expression(&*left);
+            print!(" <= ");
+            print_recursive_expression(&*right);
+            print!(")");
+        }
+        RecExprData::GreaterThan { left, right } => {
+            print!("(");
+            print_recursive_expression(&*left);
+            print!(" > ");
+            print_recursive_expression(&*right);
+            print!(")");
+        }
+        RecExprData::GreaterThanOrEqual { left, right } => {
+            print!("(");
+            print_recursive_expression(&*left);
+            print!(" >= ");
             print_recursive_expression(&*right);
             print!(")");
         }

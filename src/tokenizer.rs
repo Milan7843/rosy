@@ -40,6 +40,11 @@ pub enum SymbolType {
     ParenthesisOpen,
     ParenthesisClosed,
     EqualsEquals,
+    NotEquals,
+    GreaterThan,
+    GreaterThanOrEqual,
+    LessThan,
+    LessThanOrEqual,
     Or,
     And,
     Not,
@@ -78,7 +83,7 @@ pub struct TokenLine {
     pub indentation: usize,
 }
 
-static RESERVED_SYMBOLS: [char; 11] = ['=', '+', '-', '*', '/', '^', '.', ',', '(', ')', '"'];
+static RESERVED_SYMBOLS: [char; 14] = ['=', '+', '-', '*', '/', '^', '.', ',', '(', ')', '"', '<', '>', '!'];
 static BINARY_OPERATORS: [&str; 9] = ["+", "-", "*", "/", "^", ".", "==", "or", "and"];
 
 fn get_symbol_type(symbol: &String) -> Result<SymbolType, Error> {
@@ -94,6 +99,11 @@ fn get_symbol_type(symbol: &String) -> Result<SymbolType, Error> {
         s if s == "(" => Ok(SymbolType::ParenthesisOpen),
         s if s == ")" => Ok(SymbolType::ParenthesisClosed),
         s if s == "==" => Ok(SymbolType::EqualsEquals),
+        s if s == "!=" => Ok(SymbolType::NotEquals),
+        s if s == ">" => Ok(SymbolType::GreaterThan),
+        s if s == ">=" => Ok(SymbolType::GreaterThanOrEqual),
+        s if s == "<" => Ok(SymbolType::LessThan),
+        s if s == "<=" => Ok(SymbolType::LessThanOrEqual),
         s if s == "or" => Ok(SymbolType::Or),
         s if s == "and" => Ok(SymbolType::And),
         s if s == "not" => Ok(SymbolType::Not),
@@ -127,6 +137,11 @@ pub fn get_symbol_from_type(symbol_type: &SymbolType) -> String {
         SymbolType::ParenthesisOpen => String::from("("),
         SymbolType::ParenthesisClosed => String::from(")"),
         SymbolType::EqualsEquals => String::from("=="),
+        SymbolType::NotEquals => String::from("!="),
+        SymbolType::GreaterThan => String::from(">"),
+        SymbolType::GreaterThanOrEqual => String::from(">="),
+        SymbolType::LessThan => String::from("<"),
+        SymbolType::LessThanOrEqual => String::from("<="),
         SymbolType::Or => String::from("or"),
         SymbolType::And => String::from("and"),
         SymbolType::Not => String::from("not"),

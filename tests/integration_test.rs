@@ -417,3 +417,81 @@ fn for_loop_test() {
 
     compare(actual, str_to_string(expected));
 }
+#[test]
+fn comparison_operators_test() {
+    #[rustfmt::skip]
+    let program = Vec::from([
+        "println(1 == 1)",
+        "println(1 == 2)",
+        "println(true == true)",
+        "println(true == false)",
+        "println(\"beep\" == \"beep\")",
+        "println(\"boop\" == \"beep\")",
+        "println(1 != 1)",
+        "println(1 != 2)",
+        "println(true != true)",
+        "println(true != false)",
+        "println(\"beep\" != \"beep\")",
+        "println(\"boop\" != \"beep\")",
+        "println(1 < 1)",
+        "println(1 < 2)",
+        "println(1 <= 1)",
+        "println(1 <= 2)",
+        "println(1 > 1)",
+        "println(1 > 2)",
+        "println(1 >= 1)",
+        "println(1 >= 2)",
+        "println(1 + 1 > 2 - 1)",
+        "println(1 + 1 >= 3 - 1)",
+        "println(1 - 7 < -5)",
+        "println(1 == 2 or -1 == -1)",
+        "println(1 <= 2 and not 1 > 1)",
+        // Additional cases
+        "println(3 > 2 and 2 > 1)", // Both comparisons true
+        "println(3 > 2 or 2 < 1)", // One true, one false
+        "println(not 3 > 2)", // Not applied to a comparison
+        "println((3 > 2) == (2 > 1))", // Comparison of comparisons
+        "println(3 > 2 == 2 > 1)", // Without parentheses, should be equivalent to above
+        "println((3 > 2) and (2 == 2))", // Mixed comparison and equality
+    ]);
+
+    let actual = pipeline::run_pipeline(program);
+
+    #[rustfmt::skip]
+    let expected = Vec::from([
+        "true",
+        "false",
+        "true",
+        "false",
+        "true",
+        "false",
+        "false",
+        "true",
+        "false",
+        "true",
+        "false",
+        "true",
+        "false",
+        "true",
+        "true",
+        "true",
+        "false",
+        "false",
+        "true",
+        "false",
+        "true",
+        "true",
+        "true",
+        "true",
+        "true",
+        "true",
+        "true",
+        "false",
+        "true",
+        "true",
+        "true",
+        "",
+    ]);
+
+    compare(actual, str_to_string(expected));
+}
