@@ -255,7 +255,7 @@ fn unary_vs_binary_minus_test() {
         "-10",
         "-2",
         "25",
-        "25",
+        "-25",
         "5",
         "0",
         "",
@@ -487,6 +487,32 @@ fn comparison_operators_test() {
         "true",
         "true",
         "false",
+        "true",
+        "true",
+        "true",
+        "",
+    ]);
+
+    compare(actual, str_to_string(expected));
+}
+
+#[test]
+fn advanced_ooo_test() {
+    #[rustfmt::skip]
+    let program = Vec::from([
+        "println(-5^2)",
+        "var = -5^2 == -25",
+        "println(var)",
+        "println(-125 / -5 ^2 == 5)",
+        "var = -5^2 == 25 or -125 / -5 ^2 == 5",
+        "println(var)",
+    ]);
+
+    let actual = pipeline::run_pipeline(program);
+
+    #[rustfmt::skip]
+    let expected = Vec::from([
+        "-25",
         "true",
         "true",
         "true",

@@ -769,6 +769,36 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
         }
     }
 
+    match tokens {
+        // negative unary operator
+        [Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::Minus,
+                },
+            row: row_not,
+            col_start: col_start_not,
+            ..
+        }, rest @ ..] => {
+            // unary - statement detected
+            match get_generic_expression(&rest) {
+                Ok(expr) => {
+                    let expr_col_end = expr.col_end;
+                    return Ok(GenExpr {
+                        data: GenExprData::UnaryOp {
+                            operator: SymbolType::Minus,
+                            operand: Box::new(expr),
+                        },
+                        row: *row_not,
+                        col_start: *col_start_not,
+                        col_end: expr_col_end,
+                    })
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        _ => {}
+    }
     
     // Looking for the seventh lowest precedence operators
     if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_seven) {
