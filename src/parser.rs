@@ -113,6 +113,9 @@ pub enum RecExprData {
         left: Box<RecExpr>,
         right: Box<RecExpr>,
     },
+    Not {
+        right: Box<RecExpr>,
+    },
     Equals {
         left: Box<RecExpr>,
         right: Box<RecExpr>,
@@ -227,6 +230,52 @@ fn get_last_occurence(
                     symbol_type: symbol_type.clone(),
                 })
             {
+                // Special case handling: difference between unary and binary minus
+                if symbol_type == &SymbolType::Minus {
+                    if i == 0 {
+                        return Err(Error::SimpleError {
+                            // if its the last token, it must be unary
+                            message: format!("No occurances found"),
+                        });
+                    }
+                    match tokens[i - 1].data {
+                        TokenData::Symbol {
+                            symbol_type: SymbolType::ParenthesisOpen,
+                        }
+                        | TokenData::Symbol {
+                            symbol_type: SymbolType::Comma,
+                        }
+                        | TokenData::Symbol {
+                            symbol_type: SymbolType::Equals,
+                        }
+                        | TokenData::Symbol {
+                            symbol_type: SymbolType::Plus,
+                        }
+                        | TokenData::Symbol {
+                            symbol_type: SymbolType::Minus,
+                        }
+                        | TokenData::Symbol {
+                            symbol_type: SymbolType::Star,
+                        }
+                        | TokenData::Symbol {
+                            symbol_type: SymbolType::Slash,
+                        }
+                        | TokenData::Symbol {
+                            symbol_type: SymbolType::Hat,
+                        }
+                        | TokenData::Symbol {
+                            symbol_type: SymbolType::Or,
+                        }
+                        | TokenData::Symbol {
+                            symbol_type: SymbolType::And,
+                        }
+                        | TokenData::Symbol {
+                            symbol_type: SymbolType::EqualsEquals,
+                        } => continue,
+                        _ => return Ok((symbol_type.clone(), i)),
+                    }
+                }
+
                 return Ok((symbol_type.clone(), i));
             }
         }
@@ -258,6 +307,12 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
         GenExprData::UnaryOp { operator, operand } => match operator {
             SymbolType::Minus => match generic_expression_to_recursive_expression(*operand) {
                 Ok(operand_expr) => RecExprData::Minus {
+                    right: Box::new(operand_expr),
+                },
+                Err(e) => return Err(e),
+            },
+            SymbolType::Not => match generic_expression_to_recursive_expression(*operand) {
+                Ok(operand_expr) => RecExprData::Not {
                     right: Box::new(operand_expr),
                 },
                 Err(e) => return Err(e),
@@ -634,21 +689,50 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
                 TokenData::Symbol {
                     symbol_type: SymbolType::ParenthesisOpen,
                 },
+            col_start: col_start_parenthesis,
             ..
         }, content @ .., Token {
             data:
                 TokenData::Symbol {
                     symbol_type: SymbolType::ParenthesisClosed,
                 },
+            col_end: col_end_parenthesis,
             ..
         }] => {
             // Parentheses detected
             match get_generic_expression(&content) {
                 Ok(mut expr) => {
-                    expr.col_start -= 1;
-                    expr.col_end += 1;
+                    expr.col_start = *col_start_parenthesis;
+                    expr.col_end = *col_end_parenthesis;
 
                     return Ok(expr);
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        // not statement
+        [Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::Not,
+                },
+            row: row_not,
+            col_start: col_start_not,
+            ..
+        }, rest @ ..] => {
+            // not statement detected
+            match get_generic_expression(&rest) {
+                Ok(expr) => {
+                    let expr_col_end = expr.col_end;
+                    return Ok(GenExpr {
+                        data: GenExprData::UnaryOp {
+                            operator: SymbolType::Not,
+                            operand: Box::new(expr),
+                        },
+                        row: *row_not,
+                        col_start: *col_start_not,
+                        col_end: expr_col_end,
+                    })
                 }
                 Err(e) => return Err(e),
             }
@@ -682,6 +766,34 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
                 col_start: tokens[0].col_start,
                 col_end: tokens[0].col_end,
             })
+        }
+
+        // negative unary operator
+        [Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::Minus,
+                },
+            row: row_not,
+            col_start: col_start_not,
+            ..
+        }, rest @ ..] => {
+            // unary - statement detected
+            match get_generic_expression(&rest) {
+                Ok(expr) => {
+                    let expr_col_end = expr.col_end;
+                    return Ok(GenExpr {
+                        data: GenExprData::UnaryOp {
+                            operator: SymbolType::Minus,
+                            operand: Box::new(expr),
+                        },
+                        row: *row_not,
+                        col_start: *col_start_not,
+                        col_end: expr_col_end,
+                    })
+                }
+                Err(e) => return Err(e),
+            }
         }
 
         // Just a string
@@ -1602,6 +1714,12 @@ fn print_recursive_expression(expression: &RecExpr) {
             print!("(");
             print_recursive_expression(&*left);
             print!(" and ");
+            print_recursive_expression(&*right);
+            print!(")");
+        }
+        RecExprData::Not { right } => {
+            print!("(");
+            print!("not ");
             print_recursive_expression(&*right);
             print!(")");
         }

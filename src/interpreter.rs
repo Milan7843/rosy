@@ -475,7 +475,7 @@ fn interpret_base_expr(
                         });
                     }
                 }
-                /*
+                
                 for base_expression in body.iter() {
                     let interp_result = match interpret_base_expr(base_expression, env) {
                         Ok(result) => result,
@@ -494,7 +494,6 @@ fn interpret_base_expr(
                         InterpretationResult::Empty => {}
                     }
                 }
-                */
             }
 
             return Ok(InterpretationResult::Empty);
@@ -883,6 +882,38 @@ fn interpret_expr(
                 _ => {
                     return Err(Error::LocationError {
                         message: format!("Cannot apply operator OR on empty"),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
+            }
+        }
+        RecExprData::Not { right } => {
+            let right_value = match interpret_expr(*right, env, terminal) {
+                Ok(right_value) => right_value,
+                Err(e) => return Err(e),
+            };
+
+            match right_value {
+                Some(Value::Bool(right)) => {
+                    let result = !right;
+                    return Ok(Some(Value::Bool(result)));
+                }
+                Some(right_value) => {
+                    return Err(Error::LocationError {
+                        message: format!(
+                            "Cannot apply operator NOT on type {}",
+                            value_type_to_string(&right_value)
+                        ),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
+                _ => {
+                    return Err(Error::LocationError {
+                        message: format!("Cannot apply operator NOT on empty"),
                         row: expr.row,
                         col_start: expr.col_start,
                         col_end: expr.col_end,
