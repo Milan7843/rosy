@@ -39,6 +39,8 @@ pub enum SymbolType {
     Comma,
     ParenthesisOpen,
     ParenthesisClosed,
+    SquareBracketOpen,
+    SquareBracketClosed,
     EqualsEquals,
     NotEquals,
     GreaterThan,
@@ -83,7 +85,7 @@ pub struct TokenLine {
     pub indentation: usize,
 }
 
-static RESERVED_SYMBOLS: [char; 14] = ['=', '+', '-', '*', '/', '^', '.', ',', '(', ')', '"', '<', '>', '!'];
+static RESERVED_SYMBOLS: [char; 16] = ['=', '+', '-', '*', '/', '^', '.', ',', '(', ')', '"', '<', '>', '!', '[', ']'];
 static BINARY_OPERATORS: [&str; 9] = ["+", "-", "*", "/", "^", ".", "==", "or", "and"];
 
 fn get_symbol_type(symbol: &String) -> Result<SymbolType, Error> {
@@ -98,6 +100,8 @@ fn get_symbol_type(symbol: &String) -> Result<SymbolType, Error> {
         s if s == "," => Ok(SymbolType::Comma),
         s if s == "(" => Ok(SymbolType::ParenthesisOpen),
         s if s == ")" => Ok(SymbolType::ParenthesisClosed),
+        s if s == "[" => Ok(SymbolType::SquareBracketOpen),
+        s if s == "]" => Ok(SymbolType::SquareBracketClosed),
         s if s == "==" => Ok(SymbolType::EqualsEquals),
         s if s == "!=" => Ok(SymbolType::NotEquals),
         s if s == ">" => Ok(SymbolType::GreaterThan),
@@ -136,6 +140,8 @@ pub fn get_symbol_from_type(symbol_type: &SymbolType) -> String {
         SymbolType::Comma => String::from(","),
         SymbolType::ParenthesisOpen => String::from("("),
         SymbolType::ParenthesisClosed => String::from(")"),
+        SymbolType::SquareBracketOpen => String::from("["),
+        SymbolType::SquareBracketClosed => String::from("]"),
         SymbolType::EqualsEquals => String::from("=="),
         SymbolType::NotEquals => String::from("!="),
         SymbolType::GreaterThan => String::from(">"),
