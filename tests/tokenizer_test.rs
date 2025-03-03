@@ -1430,268 +1430,327 @@ fn array_test() {
     let program = Vec::from([
         "[1, 2, 3]",
         "a = [1 + 1, 2 * 2/3, f(1, 2, 3), 4]",
+        "[[true, false], [false, true]]",
+        "[[f([1,2], [[3],[true]]), 2], [3, 4]]",
     ]);
     let tokens = tokenizer::tokenize(program);
 
-    let expected = Vec::from([TokenLine {
-        tokens: Vec::from([
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::SquareBracketOpen,
+    let expected = Vec::from([
+        TokenLine {
+            tokens: Vec::from([
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::SquareBracketOpen,
+                    },
+                    row: 0,
+                    col_start: 0,
+                    col_end: 1,
                 },
-                row: 0,
-                col_start: 0,
-                col_end: 1,
-            },
-            Token {
-                data: TokenData::Number {
-                    number: 1,
+                Token {
+                    data: TokenData::Number {
+                        number: 1,
+                    },
+                    row: 0,
+                    col_start: 1,
+                    col_end: 2,
                 },
-                row: 0,
-                col_start: 1,
-                col_end: 2,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::Comma,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::Comma,
+                    },
+                    row: 0,
+                    col_start: 2,
+                    col_end: 3,
                 },
-                row: 0,
-                col_start: 3,
-                col_end: 4,
-            },
-            Token {
-                data: TokenData::Number {
-                    number: 2,
+                Token {
+                    data: TokenData::Number {
+                        number: 2,
+                    },
+                    row: 0,
+                    col_start: 4,
+                    col_end: 5,
                 },
-                row: 0,
-                col_start: 5,
-                col_end: 6,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::Comma,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::Comma,
+                    },
+                    row: 0,
+                    col_start: 5,
+                    col_end: 6,
                 },
-                row: 0,
-                col_start: 7,
-                col_end: 8,
-            },
-            Token {
-                data: TokenData::Number {
-                    number: 3,
+                Token {
+                    data: TokenData::Number {
+                        number: 3,
+                    },
+                    row: 0,
+                    col_start: 7,
+                    col_end: 8,
                 },
-                row: 0,
-                col_start: 9,
-                col_end: 10,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::SquareBracketClosed,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::SquareBracketClosed,
+                    },
+                    row: 0,
+                    col_start: 8,
+                    col_end: 9,
                 },
-                row: 0,
-                col_start: 10,
-                col_end: 11,
-            },
-        ]),
-        indentation: 0,
-    },
-    TokenLine {
-        tokens: Vec::from([
-            Token {
-                data: TokenData::Variable {
-                    name: String::from("a"),
+            ]),
+            indentation: 0,
+        },
+        TokenLine {
+            tokens: Vec::from([
+                Token {
+                    data: TokenData::Variable {
+                        name: String::from("a"),
+                    },
+                    row: 1,
+                    col_start: 0,
+                    col_end: 1,
                 },
-                row: 1,
-                col_start: 0,
-                col_end: 1,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::Equals,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::Equals,
+                    },
+                    row: 1,
+                    col_start: 2,
+                    col_end: 3,
                 },
-                row: 1,
-                col_start: 2,
-                col_end: 3,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::SquareBracketOpen,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::SquareBracketOpen,
+                    },
+                    row: 1,
+                    col_start: 4,
+                    col_end: 5,
                 },
-                row: 1,
-                col_start: 4,
-                col_end: 5,
-            },
-            Token {
-                data: TokenData::Number {
-                    number: 1,
+                Token {
+                    data: TokenData::Number {
+                        number: 1,
+                    },
+                    row: 1,
+                    col_start: 5,
+                    col_end: 6,
                 },
-                row: 1,
-                col_start: 5,
-                col_end: 6,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::Plus,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::Plus,
+                    },
+                    row: 1,
+                    col_start: 7,
+                    col_end: 8,
                 },
-                row: 1,
-                col_start: 7,
-                col_end: 8,
-            },
-            Token {
-                data: TokenData::Number {
-                    number: 1,
+                Token {
+                    data: TokenData::Number {
+                        number: 1,
+                    },
+                    row: 1,
+                    col_start: 9,
+                    col_end: 10,
                 },
-                row: 1,
-                col_start: 9,
-                col_end: 10,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::Comma,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::Comma,
+                    },
+                    row: 1,
+                    col_start: 10,
+                    col_end: 11,
                 },
-                row: 1,
-                col_start: 11,
-                col_end: 12,
-            },
-            Token {
-                data: TokenData::Number {
-                    number: 2,
+                Token {
+                    data: TokenData::Number {
+                        number: 2,
+                    },
+                    row: 1,
+                    col_start: 12,
+                    col_end: 13,
                 },
-                row: 1,
-                col_start: 13,
-                col_end: 14,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::Star,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::Star,
+                    },
+                    row: 1,
+                    col_start: 14,
+                    col_end: 15,
                 },
-                row: 1,
-                col_start: 15,
-                col_end: 16,
-            },
-            Token {
-                data: TokenData::Number {
-                    number: 2,
+                Token {
+                    data: TokenData::Number {
+                        number: 2,
+                    },
+                    row: 1,
+                    col_start: 16,
+                    col_end: 17,
                 },
-                row: 1,
-                col_start: 17,
-                col_end: 18,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::Slash,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::Slash,
+                    },
+                    row: 1,
+                    col_start: 17,
+                    col_end: 18,
                 },
-                row: 1,
-                col_start: 19,
-                col_end: 20,
-            },
-            Token {
-                data: TokenData::Number {
-                    number: 3,
+                Token {
+                    data: TokenData::Number {
+                        number: 3,
+                    },
+                    row: 1,
+                    col_start: 18,
+                    col_end: 19,
                 },
-                row: 1,
-                col_start: 21,
-                col_end: 22,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::Comma,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::Comma,
+                    },
+                    row: 1,
+                    col_start: 19,
+                    col_end: 20,
                 },
-                row: 1,
-                col_start: 23,
-                col_end: 24,
-            },
-            Token {
-                data: TokenData::Variable {
-                    name: String::from("f")
+                Token {
+                    data: TokenData::Variable {
+                        name: String::from("f")
+                    },
+                    row: 1,
+                    col_start: 21,
+                    col_end: 22,
                 },
-                row: 1,
-                col_start: 25,
-                col_end: 26,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::ParenthesisOpen,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::ParenthesisOpen,
+                    },
+                    row: 1,
+                    col_start: 22,
+                    col_end: 23,
                 },
-                row: 1,
-                col_start: 26,
-                col_end: 27,
-            },
-            Token {
-                data: TokenData::Number {
-                    number: 1,
+                Token {
+                    data: TokenData::Number {
+                        number: 1,
+                    },
+                    row: 1,
+                    col_start: 23,
+                    col_end: 24,
                 },
-                row: 1,
-                col_start: 27,
-                col_end: 28,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::Comma,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::Comma,
+                    },
+                    row: 1,
+                    col_start: 24,
+                    col_end: 25,
                 },
-                row: 1,
-                col_start: 29,
-                col_end: 30,
-            },
-            Token {
-                data: TokenData::Number {
-                    number: 2,
+                Token {
+                    data: TokenData::Number {
+                        number: 2,
+                    },
+                    row: 1,
+                    col_start: 26,
+                    col_end: 27,
                 },
-                row: 1,
-                col_start: 31,
-                col_end: 32,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::Comma,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::Comma,
+                    },
+                    row: 1,
+                    col_start: 27,
+                    col_end: 28,
                 },
-                row: 1,
-                col_start: 33,
-                col_end: 34,
-            },
-            Token {
-                data: TokenData::Number {
-                    number: 3,
+                Token {
+                    data: TokenData::Number {
+                        number: 3,
+                    },
+                    row: 1,
+                    col_start: 29,
+                    col_end: 30,
                 },
-                row: 1,
-                col_start: 35,
-                col_end: 36,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::ParenthesisClosed,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::ParenthesisClosed,
+                    },
+                    row: 1,
+                    col_start: 30,
+                    col_end: 31,
                 },
-                row: 1,
-                col_start: 36,
-                col_end: 37,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::Comma,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::Comma,
+                    },
+                    row: 1,
+                    col_start: 31,
+                    col_end: 32,
                 },
-                row: 1,
-                col_start: 37,
-                col_end: 38,
-            },
-            Token {
-                data: TokenData::Number {
-                    number: 4,
+                Token {
+                    data: TokenData::Number {
+                        number: 4,
+                    },
+                    row: 1,
+                    col_start: 33,
+                    col_end: 34,
                 },
-                row: 1,
-                col_start: 39,
-                col_end: 40,
-            },
-            Token {
-                data: TokenData::Symbol {
-                    symbol_type: SymbolType::SquareBracketClosed,
+                Token {
+                    data: TokenData::Symbol {
+                        symbol_type: SymbolType::SquareBracketClosed,
+                    },
+                    row: 1,
+                    col_start: 34,
+                    col_end: 35,
                 },
-                row: 1,
-                col_start: 40,
-                col_end: 41,
-            },
-        ]),
-        indentation: 0,
-    }]);
-    compare(tokens, expected);
+            ]),
+            indentation: 0,
+        },
+        TokenLine {
+            tokens: Vec::from([
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketOpen }, row: 2, col_start: 0, col_end: 1 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketOpen }, row: 2, col_start: 1, col_end: 2 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::True }, row: 2, col_start: 2, col_end: 6 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::Comma }, row: 2, col_start: 6, col_end: 7 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::False }, row: 2, col_start: 8, col_end: 13 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketClosed }, row: 2, col_start: 13, col_end: 14 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::Comma }, row: 2, col_start: 14, col_end: 15 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketOpen }, row: 2, col_start: 16, col_end: 17 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::False }, row: 2, col_start: 17, col_end: 22 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::Comma }, row: 2, col_start: 22, col_end: 23 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::True }, row: 2, col_start: 24, col_end: 28 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketClosed }, row: 2, col_start: 28, col_end: 29 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketClosed }, row: 2, col_start: 29, col_end: 30 },
+            ]),
+            indentation: 0,
+        },
+        TokenLine {
+            tokens: Vec::from([
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketOpen }, row: 3, col_start: 0, col_end: 1 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketOpen }, row: 3, col_start: 1, col_end: 2 },
+                Token { data: TokenData::Variable { name: String::from("f") }, row: 3, col_start: 2, col_end: 3 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::ParenthesisOpen }, row: 3, col_start: 3, col_end: 4 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketOpen }, row: 3, col_start: 4, col_end: 5 },
+                Token { data: TokenData::Number { number: 1 }, row: 3, col_start: 5, col_end: 6 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::Comma }, row: 3, col_start: 6, col_end: 7 },
+                Token { data: TokenData::Number { number: 2 }, row: 3, col_start: 7, col_end: 8 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketClosed }, row: 3, col_start: 8, col_end: 9 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::Comma }, row: 3, col_start: 9, col_end: 10 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketOpen }, row: 3, col_start: 11, col_end: 12 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketOpen }, row: 3, col_start: 12, col_end: 13 },
+                Token { data: TokenData::Number { number: 3 }, row: 3, col_start: 13, col_end: 14 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketClosed }, row: 3, col_start: 14, col_end: 15 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::Comma }, row: 3, col_start: 15, col_end: 16 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketOpen }, row: 3, col_start: 16, col_end: 17 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::True }, row: 3, col_start: 17, col_end: 21 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketClosed }, row: 3, col_start: 21, col_end: 22 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketClosed }, row: 3, col_start: 22, col_end: 23 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::ParenthesisClosed }, row: 3, col_start: 23, col_end: 24 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::Comma }, row: 3, col_start: 24, col_end: 25 },
+                Token { data: TokenData::Number { number: 2 }, row: 3, col_start: 26, col_end: 27 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketClosed }, row: 3, col_start: 27, col_end: 28 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::Comma }, row: 3, col_start: 28, col_end: 29 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketOpen }, row: 3, col_start: 30, col_end: 31 },
+                Token { data: TokenData::Number { number: 3 }, row: 3, col_start: 31, col_end: 32 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::Comma }, row: 3, col_start: 32, col_end: 33 },
+                Token { data: TokenData::Number { number: 4 }, row: 3, col_start: 34, col_end: 35 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketClosed }, row: 3, col_start: 35, col_end: 36 },
+                Token { data: TokenData::Symbol { symbol_type: SymbolType::SquareBracketClosed }, row: 3, col_start: 36, col_end: 37 },
+            ]),
+            indentation: 0,
+        }
+        
+        
+    ]);
+    compare_linewise(tokens, expected);
 }
 
 
