@@ -582,3 +582,45 @@ fn list_test() {
 
     compare(actual, str_to_string(expected));
 }
+
+
+#[test]
+fn list_append_test() {
+    #[rustfmt::skip]
+    let program = Vec::from([
+        "a = []",
+        "println(a)",
+        "a = [] + 1",
+        "println(a)",
+        "a = [false] + 1",
+        "println(a)",
+        "a = [false] + []",
+        "println(a)",
+        "a = [false] + [1, 2, 3]",
+        "println(a)",
+        "a = [false] + [1, 2, 3] + [4]",
+        "println(a)",
+        "a += [5]",
+        "println(a)",
+        "println(a + [6])",
+        "println(a)",
+    ]);
+
+    let actual = pipeline::run_pipeline(program);
+
+    #[rustfmt::skip]
+    let expected = Vec::from([
+        "[]",
+        "[1]",
+        "[false, 1]",
+        "[false]",
+        "[false, 1, 2, 3]",
+        "[false, 1, 2, 3, 4]",
+        "[false, 1, 2, 3, 4, 5]",
+        "[false, 1, 2, 3, 4, 5, 6]",
+        "[false, 1, 2, 3, 4, 5]",
+        "",
+    ]);
+
+    compare(actual, str_to_string(expected));
+}

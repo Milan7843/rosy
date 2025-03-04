@@ -530,9 +530,16 @@ fn add(
             let result = left.clone() + right;
             return Ok(Some(Value::String(result)));
         }
-        (Some(Value::List(elements)), Some(Value::String(right))) => {
+        (Some(Value::List(left_elements)), Some(Value::List(right_elements))) => {
+            let mut result = left_elements.clone();
+            for element in right_elements {
+                result.push(element.clone());
+            }
+            return Ok(Some(Value::List(result)));
+        }
+        (Some(Value::List(elements)), Some(value)) => {
             let mut result = elements.clone();
-            result.push(Value::String(right.clone()));
+            result.push(value.clone());
             return Ok(Some(Value::List(result)));
         }
         (Some(left), Some(right)) => {
