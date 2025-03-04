@@ -148,6 +148,13 @@ pub enum RecExprData {
         function_name: String,
         args: Vec<RecExpr>,
     },
+    List {
+        elements: Vec<RecExpr>,
+    },
+    ListAccess {
+        variable: String,
+        index: Box<RecExpr>,
+    },
 }
 
 // Generic expression, leaves out detail in e.g. operator specifics
@@ -185,6 +192,13 @@ enum GenExprData {
     FunctionCall {
         function_name: String,
         arguments: Vec<GenExpr>,
+    },
+    List {
+        elements: Vec<GenExpr>,
+    },
+    ListAccess {
+        variable: String,
+        index: Box<GenExpr>,
     },
 }
 
@@ -235,6 +249,12 @@ fn get_last_occurence(
             } => indentation_depth -= 1,
             TokenData::Symbol {
                 symbol_type: SymbolType::ParenthesisClosed,
+            } => indentation_depth += 1,
+            TokenData::Symbol {
+                symbol_type: SymbolType::SquareBracketOpen,
+            } => indentation_depth -= 1,
+            TokenData::Symbol {
+                symbol_type: SymbolType::SquareBracketClosed,
             } => indentation_depth += 1,
             _ => {}
         }
@@ -292,12 +312,21 @@ fn get_last_occurence(
                         | TokenData::Symbol {
                             symbol_type: SymbolType::EqualsEquals,
                         }
-                        | TokenData::Symbol { symbol_type: SymbolType::NotEquals }
-                        | TokenData::Symbol { symbol_type: SymbolType::GreaterThan }
-                        | TokenData::Symbol { symbol_type: SymbolType::LessThan }
-                        | TokenData::Symbol { symbol_type: SymbolType::GreaterThanOrEqual }
-                        | TokenData::Symbol { symbol_type: SymbolType::LessThanOrEqual }
-                         => continue,
+                        | TokenData::Symbol {
+                            symbol_type: SymbolType::NotEquals,
+                        }
+                        | TokenData::Symbol {
+                            symbol_type: SymbolType::GreaterThan,
+                        }
+                        | TokenData::Symbol {
+                            symbol_type: SymbolType::LessThan,
+                        }
+                        | TokenData::Symbol {
+                            symbol_type: SymbolType::GreaterThanOrEqual,
+                        }
+                        | TokenData::Symbol {
+                            symbol_type: SymbolType::LessThanOrEqual,
+                        } => continue,
                         _ => return Ok((symbol_type.clone(), i)),
                     }
                 }
@@ -559,6 +588,28 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                 args: rec_expr_arguments,
             }
         }
+        GenExprData::List { elements } => {
+            let mut rec_expr_elements = Vec::new();
+            for gen_element in elements {
+                match generic_expression_to_recursive_expression(gen_element) {
+                    Ok(rec_expr_element) => rec_expr_elements.push(rec_expr_element),
+                    Err(e) => return Err(e),
+                }
+            }
+
+            RecExprData::List {
+                elements: rec_expr_elements,
+            }
+        }
+        GenExprData::ListAccess { variable, index } => {
+            match generic_expression_to_recursive_expression(*index) {
+                Ok(rec_expr_index) => RecExprData::ListAccess {
+                    variable,
+                    index: Box::new(rec_expr_index),
+                },
+                Err(e) => return Err(e),
+            }
+        }
     };
 
     return Ok(RecExpr {
@@ -576,7 +627,12 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
     let precedence_one = Vec::from([SymbolType::Or]);
     let precedence_two = Vec::from([SymbolType::And]);
     let precedence_three = Vec::from([SymbolType::EqualsEquals, SymbolType::NotEquals]);
-    let precedence_four = Vec::from([SymbolType::GreaterThan, SymbolType::LessThan, SymbolType::GreaterThanOrEqual, SymbolType::LessThanOrEqual]);
+    let precedence_four = Vec::from([
+        SymbolType::GreaterThan,
+        SymbolType::LessThan,
+        SymbolType::GreaterThanOrEqual,
+        SymbolType::LessThanOrEqual,
+    ]);
     let precedence_five = Vec::from([SymbolType::Plus, SymbolType::Minus]);
     let precedence_six = Vec::from([SymbolType::Star, SymbolType::Slash]);
     let precedence_seven = Vec::from([SymbolType::Hat]);
@@ -633,7 +689,6 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
         }
     }
 
-    
     // Looking for the third lowest precedence operators
     if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_three) {
         let left = get_generic_expression(&tokens[0..index]);
@@ -660,13 +715,11 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
         }
     }
 
-
     match tokens {
         [Token {
-            data:
-                TokenData::Symbol {
-                    symbol_type: SymbolType::Not,
-                },
+            data: TokenData::Symbol {
+                symbol_type: SymbolType::Not,
+            },
             row: row_not,
             col_start: col_start_not,
             ..
@@ -683,7 +736,7 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
                         row: *row_not,
                         col_start: *col_start_not,
                         col_end: expr_col_end,
-                    })
+                    });
                 }
                 Err(e) => return Err(e),
             }
@@ -772,10 +825,9 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
     match tokens {
         // negative unary operator
         [Token {
-            data:
-                TokenData::Symbol {
-                    symbol_type: SymbolType::Minus,
-                },
+            data: TokenData::Symbol {
+                symbol_type: SymbolType::Minus,
+            },
             row: row_not,
             col_start: col_start_not,
             ..
@@ -792,14 +844,14 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
                         row: *row_not,
                         col_start: *col_start_not,
                         col_end: expr_col_end,
-                    })
+                    });
                 }
                 Err(e) => return Err(e),
             }
         }
         _ => {}
     }
-    
+
     // Looking for the seventh lowest precedence operators
     if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_seven) {
         let left = get_generic_expression(&tokens[0..index]);
@@ -863,6 +915,73 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
                 Err(e) => return Err(e),
             }
             // Possible function call
+        }
+
+        // List [a, b, c]
+        [Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::SquareBracketOpen,
+                },
+            ..
+        }, rest @ ..]
+            // Last token must be a closing parenthesis
+            if rest.last().unwrap().data
+                == TokenData::Symbol {
+                    symbol_type: SymbolType::SquareBracketClosed,
+                } =>
+        {
+            match read_list_items(rest) {
+                Ok(arguments) => {
+                    return Ok(GenExpr {
+                        data: GenExprData::List {
+                            elements: arguments,
+                        },
+                        row: tokens[0].row,
+                        col_start: tokens[0].col_start,
+                        col_end: tokens[tokens.len() - 1].col_end,
+                    })
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        // List access
+        [Token {
+            data: TokenData::Variable { name: variable_name },
+            row : row_variable,
+            col_start: col_start_variable,
+            ..
+        },
+        Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::SquareBracketOpen,
+                },
+            ..
+        }, rest @ .., Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::SquareBracketClosed,
+                },
+            col_end: col_end_parenthesis,
+            ..
+        }] =>
+        {
+            match get_generic_expression(&rest) {
+                Ok(index) => {
+                    return Ok(GenExpr {
+                        data: GenExprData::ListAccess {
+                            variable: variable_name.clone(),
+                            index: Box::new(index),
+                        },
+                        row: *row_variable,
+                        col_start: *col_start_variable,
+                        col_end: *col_end_parenthesis,
+                    })
+                }
+                Err(e) => return Err(e),
+            }
         }
 
         // Parentheses with content
@@ -1040,7 +1159,14 @@ fn read_function_parameters(line: &[Token]) -> Result<Vec<GenExpr>, Error> {
 
     match read_function_parameters_rec(line, &mut parameters) {
         Ok(_) => return Ok(parameters),
-        Err(e) => return Err(e),
+        Err(_) => {
+            return Err(Error::LocationError {
+                message: format!("Could not find a valid function call"),
+                row: line[0].row,
+                col_start: line[0].col_start,
+                col_end: line[line.len() - 1].col_end - 1,
+            })
+        }
     }
 }
 
@@ -1051,7 +1177,7 @@ fn read_function_parameters_rec(
     // Attempt to read a function parameter by trying to find a valid expression looking at each comma
 
     match read_function_parameter(line) {
-        Ok((None, _)) => return Ok(String::from("Succcess")),
+        Ok((None, _)) => return Ok(String::from("Success")),
         Ok((Some(parameter), rest)) => {
             parameters.push(parameter);
 
@@ -1084,6 +1210,9 @@ fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token])
                 TokenData::Symbol {
                     symbol_type: SymbolType::ParenthesisOpen,
                 } => parenthesis_depth += 1,
+                TokenData::Symbol {
+                    symbol_type: SymbolType::SquareBracketOpen,
+                } => parenthesis_depth += 1,
                 _ => {}
             }
             for i in 1..line.len() {
@@ -1104,6 +1233,12 @@ fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token])
                         symbol_type: SymbolType::ParenthesisOpen,
                     } => parenthesis_depth += 1,
                     TokenData::Symbol {
+                        symbol_type: SymbolType::SquareBracketOpen,
+                    } => parenthesis_depth += 1,
+                    TokenData::Symbol {
+                        symbol_type: SymbolType::SquareBracketClosed,
+                    } => parenthesis_depth -= 1,
+                    TokenData::Symbol {
                         symbol_type: SymbolType::ParenthesisClosed,
                     } => {
                         parenthesis_depth -= 1;
@@ -1121,6 +1256,108 @@ fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token])
             // No valid expression was found
             return Err(Error::SimpleError {
                 message: format!("Could not find a valid function call"),
+            });
+        }
+    }
+}
+
+fn read_list_items(line: &[Token]) -> Result<Vec<GenExpr>, Error> {
+    let mut items: Vec<GenExpr> = Vec::new();
+
+    match read_list_items_rec(line, &mut items) {
+        Ok(_) => return Ok(items),
+        Err(e) => {
+            return Err(Error::LocationError {
+                message: format!("Could not find a valid list"),
+                row: line[0].row,
+                col_start: line[0].col_start,
+                col_end: line[line.len() - 1].col_end - 1,
+            })
+        }
+    }
+}
+
+fn read_list_items_rec(line: &[Token], items: &mut Vec<GenExpr>) -> Result<String, Error> {
+    match read_list_item(line) {
+        Ok((None, _)) => return Ok(String::from("Succcess")),
+        Ok((Some(item), rest)) => {
+            items.push(item);
+
+            return read_list_items_rec(rest, items);
+        }
+        Err(e) => return Err(e),
+    }
+}
+
+fn read_list_item(line: &[Token]) -> Result<(Option<GenExpr>, &[Token]), Error> {
+    // Attempt to read a list item by trying to find a valid expression looking at each comma
+    match line {
+        // Found the end of the list items, stopping now
+        [Token {
+            data:
+                TokenData::Symbol {
+                    symbol_type: SymbolType::SquareBracketClosed,
+                },
+            ..
+        }, rest @ ..] => return Ok((None, rest)),
+        _ => {
+            if line.len() <= 1 {
+                return Err(Error::SimpleError {
+                    message: format!("Could not find a valid list"),
+                });
+            }
+
+            let mut parenthesis_depth = 1;
+            match line[0].data {
+                TokenData::Symbol {
+                    symbol_type: SymbolType::ParenthesisOpen,
+                } => parenthesis_depth += 1,
+                TokenData::Symbol {
+                    symbol_type: SymbolType::SquareBracketOpen,
+                } => parenthesis_depth += 1,
+                _ => {}
+            }
+            for i in 1..line.len() {
+                match line[i].data {
+                    TokenData::Symbol {
+                        symbol_type: SymbolType::Comma,
+                    } => {
+                        // Check if we're in main body of the function call
+                        if parenthesis_depth == 1 {
+                            // Attempt to get an expression from all tokens up until this comma
+                            match get_generic_expression(&line[0..i]) {
+                                Ok(expr) => return Ok((Some(expr), &line[i + 1..])),
+                                Err(_) => continue,
+                            }
+                        }
+                    }
+                    TokenData::Symbol {
+                        symbol_type: SymbolType::ParenthesisOpen,
+                    } => parenthesis_depth += 1,
+                    TokenData::Symbol {
+                        symbol_type: SymbolType::SquareBracketOpen,
+                    } => parenthesis_depth += 1,
+                    TokenData::Symbol {
+                        symbol_type: SymbolType::ParenthesisClosed,
+                    } => parenthesis_depth -= 1,
+                    TokenData::Symbol {
+                        symbol_type: SymbolType::SquareBracketClosed,
+                    } => {
+                        parenthesis_depth -= 1;
+                        if parenthesis_depth == 0 {
+                            match get_generic_expression(&line[0..i]) {
+                                Ok(expr) => return Ok((Some(expr), &line[i..])),
+                                Err(e) => return Err(e),
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            // No valid expression was found
+            return Err(Error::SimpleError {
+                message: format!("Could not find a valid list"),
             });
         }
     }
@@ -1960,6 +2197,19 @@ fn print_recursive_expression(expression: &RecExpr) {
                 print!(", ");
             }
             print!("))");
+        }
+        RecExprData::List { elements } => {
+            print!("[");
+            for element in elements {
+                print_recursive_expression(element);
+                print!(", ");
+            }
+            print!("]");
+        }
+        RecExprData::ListAccess { variable, index } => {
+            print!("{variable:?}[");
+            print_recursive_expression(index);
+            print!("]");
         }
     }
 }

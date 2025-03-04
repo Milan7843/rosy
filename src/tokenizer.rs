@@ -85,7 +85,9 @@ pub struct TokenLine {
     pub indentation: usize,
 }
 
-static RESERVED_SYMBOLS: [char; 16] = ['=', '+', '-', '*', '/', '^', '.', ',', '(', ')', '"', '<', '>', '!', '[', ']'];
+static RESERVED_SYMBOLS: [char; 16] = [
+    '=', '+', '-', '*', '/', '^', '.', ',', '(', ')', '"', '<', '>', '!', '[', ']',
+];
 static BINARY_OPERATORS: [&str; 9] = ["+", "-", "*", "/", "^", ".", "==", "or", "and"];
 
 fn get_symbol_type(symbol: &String) -> Result<SymbolType, Error> {

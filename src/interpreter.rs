@@ -38,6 +38,7 @@ enum Value {
         body: Vec<BaseExpr>,
     },
     StandardFunction(StandardFunction),
+    List(Vec<Value>),
 }
 
 fn value_to_string(value: &Value) -> String {
@@ -47,6 +48,17 @@ fn value_to_string(value: &Value) -> String {
         Value::String(value) => return format!("{value}"),
         Value::Function { name, .. } => return format!("function {}", name),
         Value::StandardFunction(_) => return String::from("standard function"),
+        Value::List(values) => {
+            let mut result = String::from("[");
+            for (i, value) in values.iter().enumerate() {
+                result.push_str(&value_to_string(value));
+                if i != values.len() - 1 {
+                    result.push_str(", ");
+                }
+            }
+            result.push_str("]");
+            return result;
+        }
     }
 }
 
@@ -57,6 +69,7 @@ fn value_type_to_string(value: &Value) -> String {
         Value::String(_) => return String::from("string"),
         Value::Function { .. } => return String::from("function"),
         Value::StandardFunction(_) => return String::from("standard function"),
+        Value::List(_) => return String::from("list"),
     }
 }
 
@@ -431,8 +444,11 @@ fn interpret_base_expr(
             let col_start = until_expr.col_start;
             let col_end = until_expr.col_end;
 
-            let until = match interpret_expr(until_expr, env, terminal) {
-                Ok(Some(Value::Number(until))) => until,
+            let values = match interpret_expr(until_expr, env, terminal) {
+                Ok(Some(Value::Number(until))) => (0..until).map(|i| Value::Number(i)).into_iter().collect(),
+                Ok(Some(Value::List(values))) => {
+                    values
+                }
                 Ok(Some(other_value)) => {
                     return Err(Error::LocationError {
                         message: format!(
@@ -457,9 +473,9 @@ fn interpret_base_expr(
 
             update_or_add_in_scope(&Value::Number(0), var_name, env.last_mut().unwrap());
 
-            for i in 0..until {
+            for i in values {
                 let scope = env.last_mut().unwrap();
-                match update_in_scope(&Value::Number(i), &var_name, scope) {
+                match update_in_scope(&i, &var_name, scope) {
                     true => {}
                     false => {
                         return Err(Error::LocationError {
@@ -470,7 +486,7 @@ fn interpret_base_expr(
                         });
                     }
                 }
-                
+
                 for base_expression in body.iter() {
                     let interp_result = match interpret_base_expr(base_expression, env, terminal) {
                         Ok(result) => result,
@@ -481,7 +497,9 @@ fn interpret_base_expr(
                         InterpretationResult::Return {
                             value: return_value,
                         } => {
-                            return Ok(InterpretationResult::Return { value: return_value });
+                            return Ok(InterpretationResult::Return {
+                                value: return_value,
+                            });
                         }
                         InterpretationResult::Break => {
                             return Ok(InterpretationResult::Break);
@@ -511,6 +529,11 @@ fn add(
         (Some(Value::String(left)), Some(Value::String(right))) => {
             let result = left.clone() + right;
             return Ok(Some(Value::String(result)));
+        }
+        (Some(Value::List(elements)), Some(Value::String(right))) => {
+            let mut result = elements.clone();
+            result.push(Value::String(right.clone()));
+            return Ok(Some(Value::List(result)));
         }
         (Some(left), Some(right)) => {
             return Err(Error::LocationError {
@@ -555,8 +578,6 @@ fn interpret_expr(
         RecExprData::Number { number } => return Ok(Some(Value::Number(*number))),
         RecExprData::Boolean { value } => return Ok(Some(Value::Bool(*value))),
         RecExprData::String { value } => return Ok(Some(Value::String(value.clone()))),
-
-        // Arithmetic
         RecExprData::Add { left, right } => {
             let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
@@ -762,7 +783,6 @@ fn interpret_expr(
                 }
             }
         }
-
         RecExprData::Equals { left, right } => {
             let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
@@ -800,7 +820,6 @@ fn interpret_expr(
                 }
             }
         }
-        
         RecExprData::NotEquals { left, right } => {
             let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
@@ -838,8 +857,6 @@ fn interpret_expr(
                 }
             }
         }
-        
-        
         RecExprData::GreaterThan { left, right } => {
             let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
@@ -877,7 +894,6 @@ fn interpret_expr(
                 }
             }
         }
-
         RecExprData::GreaterThanOrEqual { left, right } => {
             let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
@@ -915,8 +931,6 @@ fn interpret_expr(
                 }
             }
         }
-
-        // less than
         RecExprData::LessThan { left, right } => {
             let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
@@ -954,8 +968,6 @@ fn interpret_expr(
                 }
             }
         }
-
-        // less than or equal
         RecExprData::LessThanOrEqual { left, right } => {
             let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
@@ -993,10 +1005,6 @@ fn interpret_expr(
                 }
             }
         }
-
-
-
-        // Boolean operators
         RecExprData::And { left, right } => {
             let left_value = match interpret_expr(&*left, env, terminal) {
                 Ok(left_value) => left_value,
@@ -1103,7 +1111,6 @@ fn interpret_expr(
                 }
             }
         }
-
         RecExprData::FunctionCall {
             function_name,
             args,
@@ -1242,7 +1249,6 @@ fn interpret_expr(
                 }
             }
         }
-
         RecExprData::Assign {
             variable_name,
             right,
@@ -1271,11 +1277,86 @@ fn interpret_expr(
 
             return Ok(None);
         }
-
         RecExprData::Access { object, variable } => {
             return Err(Error::SimpleError {
                 message: format!("not implemented"),
             });
+        }
+        RecExprData::List { elements } => {
+            let mut list = Vec::new();
+            for element in elements {
+                let value = match interpret_expr(&element, env, terminal) {
+                    Ok(Some(value)) => value,
+                    Ok(None) => {
+                        return Err(Error::LocationError {
+                            message: format!("Cannot add empty to a list"),
+                            row: element.row,
+                            col_start: element.col_start,
+                            col_end: element.col_end,
+                        });
+                    }
+                    Err(e) => return Err(e),
+                };
+
+                list.push(value);
+            }
+
+            return Ok(Some(Value::List(list)));
+        }
+        RecExprData::ListAccess { variable, index } => {
+            let variable_value = match find_in_env(&variable, env) {
+                Some(value) => value,
+                None => {
+                    return Err(Error::LocationError {
+                        message: format!("Variable {} not found", variable),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
+            };
+
+            let index_value = match interpret_expr(&*index, env, terminal) {
+                Ok(Some(value)) => value,
+                Ok(None) => {
+                    return Err(Error::LocationError {
+                        message: format!("Cannot access list with empty"),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
+                Err(e) => return Err(e),
+            };
+
+            match (variable_value, index_value) {
+                (Value::List(list), Value::Number(index)) => {
+                    let index = index as usize;
+                    let len = list.len();
+                    if index >= len {
+                        return Err(Error::LocationError {
+                            message: format!("Index {index} out of bounds for list of length {len}"),
+                            row: expr.row,
+                            col_start: expr.col_start,
+                            col_end: expr.col_end,
+                        });
+                    }
+
+                    return Ok(Some(list[index].clone()));
+                }
+                (variable_value, index_value) => {
+                    return Err(Error::LocationError {
+                        message: format!(
+                            "Cannot access list with types {} and {}",
+                            value_type_to_string(&variable_value),
+                            value_type_to_string(&index_value)
+                        ),
+                        row: expr.row,
+                        col_start: expr.col_start,
+                        col_end: expr.col_end,
+                    });
+                }
+            }
         }
     }
 }

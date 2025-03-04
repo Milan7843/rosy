@@ -225,7 +225,6 @@ fn test_variable_shadowing() {
     compare(actual, str_to_string(expected));
 }
 
-
 #[test]
 fn unary_vs_binary_minus_test() {
     #[rustfmt::skip]
@@ -516,6 +515,68 @@ fn advanced_ooo_test() {
         "true",
         "true",
         "true",
+        "",
+    ]);
+
+    compare(actual, str_to_string(expected));
+}
+
+#[test]
+fn list_test() {
+    #[rustfmt::skip]
+    let program = Vec::from([
+        "a = []",
+        "println(a)",
+        "a = [12]",
+        "println(a)",
+        "a = [\"boop\"]",
+        "println(a)",
+        "a = [false]",
+        "println(a)",
+        "a = [1, 2, 3, 4]",
+        "println(a)",
+        "b = 5",
+        "c = 6",
+        "a = [b, c, b, b]",
+        "println(a)",
+        "a = [\"str\", false, true, 123123, [1, 2, 3], [[1], [1, 2]]]",
+        "println(a)",
+        "println(a[0])",
+        "for i in a",
+        "    println(i)",
+        "for i in 6",
+        "    println(a[i])",
+        "for i in 3",
+        "    println(a[i + 3])",
+    ]);
+
+    let actual = pipeline::run_pipeline(program);
+
+    #[rustfmt::skip]
+    let expected = Vec::from([
+        "[]",
+        "[12]",
+        "[boop]",
+        "[false]",
+        "[1, 2, 3, 4]",
+        "[5, 6, 5, 5]",
+        "[str, false, true, 123123, [1, 2, 3], [[1], [1, 2]]]",
+        "str", // a[0]
+        "str",
+        "false",
+        "true",
+        "123123",
+        "[1, 2, 3]",
+        "[[1], [1, 2]]", 
+        "str",
+        "false",
+        "true",
+        "123123",
+        "[1, 2, 3]",
+        "[[1], [1, 2]]",
+        "123123",
+        "[1, 2, 3]",
+        "[[1], [1, 2]]",
         "",
     ]);
 
