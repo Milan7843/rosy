@@ -2,7 +2,11 @@ use rosy::parser::{self, BaseExpr, BaseExprData, RecExpr, RecExprData};
 use rosy::pipeline::print_error;
 use rosy::tokenizer::Error;
 
-fn compare(actual: Result<Vec<BaseExpr>, Error>, expected: Vec<BaseExpr>, program: &Vec<&str>) {
+fn compare(
+    actual: Result<Vec<BaseExpr<()>>, Error>,
+    expected: Vec<BaseExpr<()>>,
+    program: &Vec<&str>,
+) {
     match actual
     {
         Ok(tokens) => assert_eq!(tokens, expected),
@@ -11,8 +15,8 @@ fn compare(actual: Result<Vec<BaseExpr>, Error>, expected: Vec<BaseExpr>, progra
 }
 
 fn compare_linewise(
-    actual: Result<Vec<BaseExpr>, Error>,
-    expected: Vec<BaseExpr>,
+    actual: Result<Vec<BaseExpr<()>>, Error>,
+    expected: Vec<BaseExpr<()>>,
     program: &Vec<&str>,
 ) {
     match actual

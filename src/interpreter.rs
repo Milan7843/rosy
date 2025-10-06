@@ -507,14 +507,6 @@ fn interpret_base_expr(
             let col_start = until_expr.col_start;
             let col_end = until_expr.col_end;
 
-<<<<<<< Updated upstream
-            let values = match interpret_expr(until_expr, env, terminal) {
-                Ok(Some(Value::Number(until))) => (0..until).map(|i| Value::Number(i)).into_iter().collect(),
-                Ok(Some(Value::List(values))) => {
-                    values
-                }
-                Ok(Some(other_value)) => {
-=======
             let values = match interpret_expr(until_expr, env, terminal)
             {
                 Ok(Some(Value::Number(until))) =>
@@ -524,7 +516,6 @@ fn interpret_base_expr(
                 Ok(Some(Value::List(values))) => values,
                 Ok(Some(other_value)) =>
                 {
->>>>>>> Stashed changes
                     return Err(Error::LocationError {
                         message: format!(
                             "Cannot use {} as a condition for a for loop",
@@ -1582,7 +1573,9 @@ fn interpret_expr(
                     if index >= len
                     {
                         return Err(Error::LocationError {
-                            message: format!("Index {index} out of bounds for list of length {len}"),
+                            message: format!(
+                                "Index {index} out of bounds for list of length {len}"
+                            ),
                             row: expr.row,
                             col_start: expr.col_start,
                             col_end: expr.col_end,

@@ -6,6 +6,7 @@ use crate::parser::BaseExprData;
 use crate::parser::RecExpr;
 use crate::parser::RecExprData;
 use crate::tokenizer::Error;
+use crate::typechecker::Type;
 
 #[derive(Debug, Clone)]
 pub enum TacInstruction {
@@ -46,7 +47,7 @@ pub enum TacValue {
     StringLiteral(String),
 }
 
-pub fn generate_tac(program: Vec<BaseExpr>) -> Result<Vec<TacInstruction>, Error> {
+pub fn generate_tac(program: Vec<BaseExpr<Type>>) -> Result<Vec<TacInstruction>, Error> {
     let mut instructions = Vec::new();
     let mut temp_counter = 0;
     let mut label_counter = 0;
@@ -67,7 +68,7 @@ pub fn generate_tac(program: Vec<BaseExpr>) -> Result<Vec<TacInstruction>, Error
 }
 
 fn generate_tac_for_base_expr(
-    expr: &BaseExpr,
+    expr: &BaseExpr<Type>,
     instructions: &mut Vec<TacInstruction>,
     temp_counter: &mut i64,
     label_counter: &mut i64,
@@ -140,7 +141,7 @@ fn generate_tac_for_base_expr(
 }
 
 fn generate_tac_for_rec_expr(
-    expr: &RecExpr,
+    expr: &RecExpr<Type>,
     instructions: &mut Vec<TacInstruction>,
     temp_counter: &mut i64,
 ) -> Result<TacValue, Error> {
@@ -174,8 +175,8 @@ fn generate_tac_for_rec_expr(
 
 fn generate_binary_op_tac(
     operator: &BinOp,
-    left: &RecExpr,
-    right: &RecExpr,
+    left: &RecExpr<Type>,
+    right: &RecExpr<Type>,
     instructions: &mut Vec<TacInstruction>,
     temp_counter: &mut i64,
 ) -> Result<TacValue, Error> {

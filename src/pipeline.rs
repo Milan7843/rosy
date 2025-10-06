@@ -1,11 +1,10 @@
 use std::path::PathBuf;
 
+use crate::desugarer;
 use crate::interpreter;
 use crate::parser;
 use crate::tokenizer;
 use crate::tokenizer::Error;
-<<<<<<< Updated upstream
-=======
 use crate::typechecker;
 
 pub fn run_typecheck_pipeline_from_path(path: &std::path::PathBuf) -> Result<String, String> {
@@ -46,7 +45,6 @@ pub fn run_typecheck_pipeline(lines: Vec<&str>) -> Result<String, String> {
 
     return Ok("Typecheck passed".to_string());
 }
->>>>>>> Stashed changes
 
 pub fn run_pipeline_from_path(path: &std::path::PathBuf) -> Result<interpreter::Terminal, String> {
     // Read the file into a big string
@@ -84,8 +82,6 @@ pub fn run_pipeline(lines: Vec<&str>) -> Result<interpreter::Terminal, String> {
     return Ok(output_terminal);
 }
 
-<<<<<<< Updated upstream
-=======
 pub fn run_compilation_pipeline_from_path(path: &std::path::PathBuf) -> Result<(), String> {
     // Read the file into a big string
     let content = std::fs::read_to_string(path).expect("could not read file");
@@ -111,18 +107,18 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
 
     let desugared_base_expressions = desugarer::desugar(base_expressions);
 
-    match typechecker::type_check_program(desugared_base_expressions.clone(), false)
-    {
-        Ok(_) =>
-        {}
-        Err(error) =>
+    let typed_base_expressions =
+        match typechecker::type_check_program(desugared_base_expressions.clone(), false)
         {
-            print_error(&error, &lines_copy);
-            return Err(String::new());
-        }
-    }
+            Ok(typed_base_expressions) => typed_base_expressions,
+            Err(error) =>
+            {
+                print_error(&error, &lines_copy);
+                return Err(String::new());
+            }
+        };
 
-    match crate::compiler::compile(desugared_base_expressions)
+    match crate::compiler::compile(typed_base_expressions)
     {
         Ok(_) =>
         {}
@@ -136,7 +132,6 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
     return Ok(());
 }
 
->>>>>>> Stashed changes
 pub fn print_error(error: &Error, lines: &Vec<&str>) {
     match error
     {
@@ -164,8 +159,6 @@ pub fn print_error(error: &Error, lines: &Vec<&str>) {
                 col_start + 1
             );
         }
-<<<<<<< Updated upstream
-=======
         Error::TypeError {
             message,
             expected,
@@ -190,6 +183,5 @@ pub fn print_error(error: &Error, lines: &Vec<&str>) {
             println!("Expected type: {:?}", expected);
             println!("Found type: {:?}", found);
         }
->>>>>>> Stashed changes
     }
 }

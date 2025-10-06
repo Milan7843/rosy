@@ -13,8 +13,9 @@ use crate::parser::RecExprData;
 use crate::tac;
 use crate::tokenizer::Error;
 use crate::typechecker;
+use crate::typechecker::Type;
 
-pub fn compile(base_expressions: Vec<BaseExpr<()>>) -> Result<Vec<Instruction>, Error> {
+pub fn compile(base_expressions: Vec<BaseExpr<Type>>) -> Result<Vec<Instruction>, Error> {
     let tac_instructions = tac::generate_tac(base_expressions)?;
 
     let mut instructions = Vec::new();

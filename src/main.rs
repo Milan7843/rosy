@@ -54,20 +54,31 @@ Default functions:
 */
 
 // Search for a pattern in a file and display the lines that contain it.
+#[derive(clap::Subcommand)]
+enum Command {
+    /// Run the source file
+    Run {
+        /// The path to the file to read
+        path: std::path::PathBuf,
+    },
+    /// Compile the source file to an executable
+    Compile { path: std::path::PathBuf },
+    /// Typecheck the source file
+    Typecheck { path: std::path::PathBuf },
+    /// Debug the source file
+    Debug { path: std::path::PathBuf },
+}
+
 #[derive(Parser)]
 struct Cli {
-    // The path to the file to read
-    path: std::path::PathBuf,
+    /// The path to the file to read
+    #[clap(subcommand)]
+    command: Command,
 }
 
 pub fn main() {
     let args = Cli::parse();
 
-<<<<<<< Updated upstream
-    match pipeline::run_pipeline_from_path(&args.path) {
-        Ok(terminal) => {}
-        Err(err) => println!("{err}"),
-=======
     match args.command
     {
         Command::Run { path } => match pipeline::run_pipeline_from_path(&path)
@@ -94,6 +105,5 @@ pub fn main() {
         },
         Command::Debug { path: _ } =>
         {}
->>>>>>> Stashed changes
     }
 }

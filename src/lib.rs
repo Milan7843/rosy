@@ -1,5 +1,11 @@
 use clap::Parser;
+pub mod assembler;
+pub mod compiler;
+pub mod desugarer;
+pub mod exewriter;
 pub mod interpreter;
 pub mod parser;
 pub mod pipeline;
+pub mod tac;
 pub mod tokenizer;
+pub mod typechecker;

@@ -21,15 +21,29 @@ fn simple_number() {
         generic_data: (),
     };
 
-    let expected_type = Type::Integer;
-    let result: Result<Type, Error> = typechecker::get_type(program);
-    let actual_type = match result
+    let expected = BaseExpr {
+        data: BaseExprData::Simple {
+            expr: RecExpr {
+                data: RecExprData::Number { number: 42 },
+                row: 0,
+                col_start: 0,
+                col_end: 2,
+                generic_data: Type::Integer,
+            },
+        },
+        row: 0,
+        col_start: 0,
+        col_end: 2,
+        generic_data: Type::Integer,
+    };
+    let result = typechecker::get_type(program);
+    let actual = match result
     {
         Err(e) => panic!("Typechecker returned an error: {:?}", e),
         Ok(t) => t,
     };
 
-    assert_eq!(actual_type, expected_type);
+    assert_eq!(actual, expected);
 }
 
 #[test]
@@ -52,15 +66,32 @@ fn simple_string() {
         generic_data: (),
     };
 
-    let expected_type = Type::String;
-    let result: Result<Type, Error> = typechecker::get_type(program);
-    let actual_type = match result
+    let expected = BaseExpr {
+        data: BaseExprData::Simple {
+            expr: RecExpr {
+                data: RecExprData::String {
+                    value: String::from("Hello, World!"),
+                },
+                row: 0,
+                col_start: 0,
+                col_end: 16,
+                generic_data: Type::String,
+            },
+        },
+        row: 0,
+        col_start: 0,
+        col_end: 16,
+        generic_data: Type::String,
+    };
+
+    let result = typechecker::get_type(program);
+    let actual = match result
     {
         Err(e) => panic!("Typechecker returned an error: {:?}", e),
         Ok(t) => t,
     };
 
-    assert_eq!(actual_type, expected_type);
+    assert_eq!(actual, expected);
 }
 
 #[test]
@@ -96,20 +127,7 @@ fn addition_of_integers() {
         generic_data: (),
     };
 
-    let expected_type = Type::Integer;
-    let result: Result<Type, Error> = typechecker::get_type(program);
-    let actual_type = match result
-    {
-        Err(e) => panic!("Typechecker returned an error: {:?}", e),
-        Ok(t) => t,
-    };
-
-    assert_eq!(actual_type, expected_type);
-}
-
-#[test]
-fn addition_of_integer_and_float() {
-    let program = BaseExpr {
+    let expected = BaseExpr {
         data: BaseExprData::Simple {
             expr: RecExpr {
                 data: RecExprData::Add {
@@ -118,37 +136,35 @@ fn addition_of_integer_and_float() {
                         row: 1,
                         col_start: 1,
                         col_end: 2,
-                        generic_data: (),
+                        generic_data: Type::Integer,
                     }),
                     right: Box::new(RecExpr {
-                        data: RecExprData::Number { number: 6 },
+                        data: RecExprData::Number { number: 10 },
                         row: 1,
                         col_start: 5,
-                        col_end: 8,
-                        generic_data: (),
+                        col_end: 6,
+                        generic_data: Type::Integer,
                     }),
                 },
                 row: 1,
                 col_start: 1,
-                col_end: 8,
-                generic_data: (),
+                col_end: 6,
+                generic_data: Type::Integer,
             },
         },
         row: 1,
         col_start: 1,
-        col_end: 8,
-        generic_data: (),
+        col_end: 6,
+        generic_data: Type::Integer,
     };
-
-    let expected_type = Type::Integer;
-    let result: Result<Type, Error> = typechecker::get_type(program);
-    let actual_type = match result
+    let result = typechecker::get_type(program);
+    let actual = match result
     {
         Err(e) => panic!("Typechecker returned an error: {:?}", e),
         Ok(t) => t,
     };
 
-    assert_eq!(actual_type, expected_type);
+    assert_eq!(actual, expected);
 }
 
 #[test]
@@ -186,7 +202,7 @@ fn type_error_in_addition() {
         generic_data: (),
     };
 
-    let result: Result<Type, Error> = typechecker::get_type(program);
+    let result = typechecker::get_type(program);
     match result
     {
         Err(e) => match e

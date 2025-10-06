@@ -1,3 +1,6 @@
+use crate::typechecker::Type;
+
+#[derive(PartialEq, Debug)]
 pub enum Error {
     LocationError {
         message: String,
@@ -7,6 +10,14 @@ pub enum Error {
     },
     SimpleError {
         message: String,
+    },
+    TypeError {
+        message: String,
+        expected: Type,
+        found: Type,
+        row: usize,
+        col_start: usize,
+        col_end: usize,
     },
 }
 

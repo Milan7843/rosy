@@ -584,7 +584,6 @@ fn list_test() {
     compare(actual, str_to_string(expected));
 }
 
-
 #[test]
 fn list_append_test() {
     #[rustfmt::skip]

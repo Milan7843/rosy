@@ -2,11 +2,6 @@ use crate::parser;
 use crate::parser::BaseExpr;
 use crate::parser::RecExpr;
 
-<<<<<<< Updated upstream
-fn desugar(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>, String> {
-    
-}
-=======
 pub fn desugar(base_expressions: Vec<BaseExpr<()>>) -> Vec<BaseExpr<()>> {
     let mut desugared_expressions = Vec::new();
 
@@ -204,4 +199,3 @@ fn desugar_base_expr(base_expr: BaseExpr<()>) -> Vec<BaseExpr<()>> {
         }
     }
 }
->>>>>>> Stashed changes

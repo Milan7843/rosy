@@ -377,12 +377,15 @@ fn type_check(
             BaseExprData::Simple { expr: rec_expr } =>
             {
                 let rec_expr_typed = check_type_rec(rec_expr, env, func_env)?;
+                let rec_expr_type = rec_expr_typed.generic_data.clone();
                 typed_base_expressions.push(BaseExpr {
-                    data: BaseExprData::Simple { expr: rec_expr_typed },
+                    data: BaseExprData::Simple {
+                        expr: rec_expr_typed,
+                    },
                     row: base_expr.row,
                     col_start: base_expr.col_start,
                     col_end: base_expr.col_end,
-                    generic_data: Type::Undefined, // We do not store the type of simple expressions
+                    generic_data: rec_expr_type,
                 });
             }
             BaseExprData::VariableAssignment { var_name, expr } =>
@@ -425,7 +428,7 @@ fn type_check(
                 let condition_col_end = condition.col_end;
 
                 let cond_typed = check_type_rec(condition, env, func_env)?;
-                let cond_type = cond_typed.generic_data;
+                let cond_type = cond_typed.generic_data.clone();
 
                 if cond_type != Type::Boolean
                 {
@@ -441,7 +444,8 @@ fn type_check(
 
                 // Typecheck the body in a new scope
                 env.scopes.push(Vec::new());
-                let body_typed = type_check(body, env, func_env, print_results, expected_return_type)?;
+                let body_typed =
+                    type_check(body, env, func_env, print_results, expected_return_type)?;
                 env.scopes.pop();
 
                 let else_typed = match else_statement
@@ -457,10 +461,10 @@ fn type_check(
                             expected_return_type,
                         )?;
                         env.scopes.pop();
-                        Some(Box::new(else_typed[0]))
+                        Some(Box::new(else_typed[0].clone()))
                     }
-                    None => None
-                }
+                    None => None,
+                };
                 typed_base_expressions.push(BaseExpr {
                     data: BaseExprData::IfStatement {
                         condition: cond_typed,
@@ -483,7 +487,9 @@ fn type_check(
                 let condition_col_start = condition.col_start;
                 let condition_col_end = condition.col_end;
 
-                let cond_type = check_type_rec(condition, env, func_env)?;
+                let cond_typed = check_type_rec(condition, env, func_env)?;
+                let cond_type = cond_typed.generic_data.clone();
+
                 if cond_type != Type::Boolean
                 {
                     return Err(Error::TypeError {
@@ -498,15 +504,16 @@ fn type_check(
 
                 // Typecheck the body in a new scope
                 env.scopes.push(Vec::new());
-                type_check(body, env, func_env, print_results, expected_return_type)?;
+                let body_typed =
+                    type_check(body, env, func_env, print_results, expected_return_type)?;
                 env.scopes.pop();
 
-                match else_statement
+                let else_typed = match else_statement
                 {
                     Some(else_expr) =>
                     {
                         env.scopes.push(Vec::new());
-                        type_check(
+                        let else_typed = type_check(
                             vec![*else_expr],
                             env,
                             func_env,
@@ -514,17 +521,37 @@ fn type_check(
                             expected_return_type,
                         )?;
                         env.scopes.pop();
+                        Some(Box::new(else_typed[0].clone()))
                     }
-                    None =>
-                    {}
-                }
+                    None => None,
+                };
+                typed_base_expressions.push(BaseExpr {
+                    data: BaseExprData::ElseIfStatement {
+                        condition: cond_typed,
+                        body: body_typed,
+                        else_statement: else_typed,
+                    },
+                    row: base_expr.row,
+                    col_start: base_expr.col_start,
+                    col_end: base_expr.col_end,
+                    generic_data: Type::Undefined, // We do not store the type of if statements
+                });
             }
             BaseExprData::ElseStatement { body } =>
             {
                 // Typecheck the body in a new scope
                 env.scopes.push(Vec::new());
-                type_check(body, env, func_env, print_results, expected_return_type)?;
+                let body_typed =
+                    type_check(body, env, func_env, print_results, expected_return_type)?;
                 env.scopes.pop();
+
+                typed_base_expressions.push(BaseExpr {
+                    data: BaseExprData::ElseStatement { body: body_typed },
+                    row: base_expr.row,
+                    col_start: base_expr.col_start,
+                    col_end: base_expr.col_end,
+                    generic_data: Type::Undefined, // We do not store the type of else statements
+                });
             }
             BaseExprData::Return {
                 return_value: optional_return_value,
@@ -550,7 +577,9 @@ fn type_check(
                 // There is a return value
                 // Therefore we type-check it and compare it to the expected return type
                 // If there is no expected return type, we set it to the type of this return value
-                let return_type = check_type_rec(return_value, env, func_env)?;
+                let return_typed = check_type_rec(return_value, env, func_env)?;
+                let return_type = return_typed.generic_data.clone();
+
                 match &expected_return_type
                 {
                     Some(expected_type) =>
@@ -571,9 +600,19 @@ fn type_check(
                     None =>
                     {
                         // If there was no expected return type, we set it to the current return type
-                        *expected_return_type = Some(return_type);
+                        *expected_return_type = Some(return_type.clone());
                     }
                 }
+
+                typed_base_expressions.push(BaseExpr {
+                    data: BaseExprData::Return {
+                        return_value: Some(return_typed),
+                    },
+                    row: base_expr.row,
+                    col_start: base_expr.col_start,
+                    col_end: base_expr.col_end,
+                    generic_data: return_type,
+                });
             }
             BaseExprData::ForLoop {
                 var_name,
@@ -585,7 +624,8 @@ fn type_check(
                 let until_col_start = until.col_start;
                 let until_col_end = until.col_end;
 
-                let iteration_type = match check_type_rec(until, env, func_env)?
+                let iteration_typed = check_type_rec(until, env, func_env)?;
+                let iteration_variable_type = match iteration_typed.generic_data.clone()
                 {
                     Type::Integer => Type::Integer,
                     Type::List(list_type) => *list_type,
@@ -605,13 +645,36 @@ fn type_check(
 
                 // Typechecking the body with the iteration variable included in the scope
                 env.scopes.push(Vec::new());
-                update_or_add_in_scope(&iteration_type, &var_name, env.scopes.last_mut().unwrap());
-                type_check(body, env, func_env, print_results, expected_return_type)?;
+                update_or_add_in_scope(
+                    &iteration_variable_type,
+                    &var_name,
+                    env.scopes.last_mut().unwrap(),
+                );
+                let body_typed =
+                    type_check(body, env, func_env, print_results, expected_return_type)?;
                 env.scopes.pop();
+
+                typed_base_expressions.push(BaseExpr {
+                    data: BaseExprData::ForLoop {
+                        var_name: var_name.clone(),
+                        until: iteration_typed,
+                        body: body_typed,
+                    },
+                    row: base_expr.row,
+                    col_start: base_expr.col_start,
+                    col_end: base_expr.col_end,
+                    generic_data: Type::Undefined, // We do not store the type of for loops
+                });
             }
             BaseExprData::Break =>
             {
-                // We do not need to do anything here, as break statements do not affect types
+                typed_base_expressions.push(BaseExpr {
+                    data: BaseExprData::Break,
+                    row: base_expr.row,
+                    col_start: base_expr.col_start,
+                    col_end: base_expr.col_end,
+                    generic_data: Type::Undefined, // We do not store the type of break statements
+                });
             }
             _ =>
             {
@@ -629,7 +692,7 @@ fn type_check(
 }
 
 // This function allows entry into type-checking a single rec-expr from a test
-pub fn get_type(base_expr: BaseExpr<()>) -> Result<Type, Error> {
+pub fn get_type(base_expr: BaseExpr<()>) -> Result<BaseExpr<Type>, Error> {
     let mut env: TypeEnvironment = TypeEnvironment {
         scopes: Vec::new(),
         functions: Vec::new(),
@@ -645,7 +708,17 @@ pub fn get_type(base_expr: BaseExpr<()>) -> Result<Type, Error> {
     {
         BaseExprData::Simple { expr: rec_expr } =>
         {
-            return check_type_rec(rec_expr, &mut env, &func_env);
+            let rec_expr_typed = check_type_rec(rec_expr, &mut env, &func_env)?;
+            let rec_expr_type = rec_expr_typed.generic_data.clone();
+            return Ok(BaseExpr {
+                data: BaseExprData::Simple {
+                    expr: rec_expr_typed,
+                },
+                row: base_expr.row,
+                col_start: base_expr.col_start,
+                col_end: base_expr.col_end,
+                generic_data: rec_expr_type,
+            });
         }
         _ =>
         {
@@ -702,13 +775,13 @@ fn check_type_rec(
             }
             let first_elem_typed = check_type_rec(elements[0].clone(), env, func_env)?;
             let first_elem_type = first_elem_typed.generic_data.clone();
-            let typed_elements = Vec::<RecExpr<Type>>::new();
+            let mut typed_elements = Vec::<RecExpr<Type>>::new();
             typed_elements.push(first_elem_typed);
 
             for elem in elements.iter().skip(1)
             {
                 let elem_typed = check_type_rec(elem.clone(), env, func_env)?;
-                let elem_type = elem_typed.generic_data;
+                let elem_type = elem_typed.generic_data.clone();
                 if elem_type != first_elem_type
                 {
                     return Err(Error::TypeError {
@@ -1250,7 +1323,6 @@ fn check_type_rec(
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
 
-
             if left_type != Type::Integer && left_type != Type::Float
             {
                 return Err(Error::TypeError {
@@ -1297,7 +1369,6 @@ fn check_type_rec(
             let right_typed = check_type_rec(*right, env, func_env)?;
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
-
 
             if left_type != Type::Integer && left_type != Type::Float
             {
@@ -1346,7 +1417,6 @@ fn check_type_rec(
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
 
-
             if left_type != Type::Integer && left_type != Type::Float
             {
                 return Err(Error::TypeError {
@@ -1393,7 +1463,6 @@ fn check_type_rec(
             let right_typed = check_type_rec(*right, env, func_env)?;
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
-
 
             if left_type != Type::Integer && left_type != Type::Float
             {
@@ -1497,7 +1566,7 @@ fn check_type_rec(
                 Some(Type::List(elem_type)) =>
                 {
                     let index_typed = check_type_rec(*index, env, func_env)?;
-                    let index_type = index_typed.generic_data;
+                    let index_type = index_typed.generic_data.clone();
                     if index_type != Type::Integer
                     {
                         return Err(Error::TypeError {
@@ -1552,7 +1621,16 @@ fn check_type_rec(
             let var_type = find_in_env(&name, &env);
             match var_type
             {
-                Some(t) => Ok(t),
+                Some(t) =>
+                {
+                    return Ok(RecExpr {
+                        data: RecExprData::Variable { name },
+                        row: rec_expr_row,
+                        col_start: rec_expr_col_start,
+                        col_end: rec_expr_col_end,
+                        generic_data: t,
+                    });
+                }
                 None => Err(Error::TypeError {
                     message: format!("Variable '{}' is not defined", name),
                     expected: Type::Undefined,
