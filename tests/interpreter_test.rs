@@ -8,7 +8,8 @@ use rosy::{
 };
 
 fn compare(actual: Result<Terminal, Error>, expected: Terminal) {
-    match actual {
+    match actual
+    {
         Ok(tokens) => assert_eq!(tokens, expected),
         Err(_) => panic!(" error "),
     }
@@ -27,16 +28,19 @@ fn number_test() {
                             row: 0,
                             col_start: 8,
                             col_end: 9,
+                            generic_data: (),
                         }]),
                     },
                     row: 0,
                     col_start: 0,
                     col_end: 10,
+                    generic_data: (),
                 },
             },
             row: 0,
             col_start: 0,
             col_end: 10,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -48,16 +52,19 @@ fn number_test() {
                             row: 1,
                             col_start: 8,
                             col_end: 9,
+                            generic_data: (),
                         }]),
                     },
                     row: 1,
                     col_start: 0,
                     col_end: 10,
+                    generic_data: (),
                 },
             },
             row: 1,
             col_start: 0,
             col_end: 10,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -69,16 +76,19 @@ fn number_test() {
                             row: 2,
                             col_start: 8,
                             col_end: 10,
+                            generic_data: (),
                         }]),
                     },
                     row: 2,
                     col_start: 0,
                     col_end: 11,
+                    generic_data: (),
                 },
             },
             row: 2,
             col_start: 0,
             col_end: 11,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -90,16 +100,19 @@ fn number_test() {
                             row: 3,
                             col_start: 8,
                             col_end: 16,
+                            generic_data: (),
                         }]),
                     },
                     row: 3,
                     col_start: 0,
                     col_end: 17,
+                    generic_data: (),
                 },
             },
             row: 3,
             col_start: 0,
             col_end: 17,
+            generic_data: (),
         },
     ]);
 

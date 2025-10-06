@@ -3,7 +3,8 @@ use rosy::pipeline::print_error;
 use rosy::tokenizer::Error;
 
 fn compare(actual: Result<Vec<BaseExpr>, Error>, expected: Vec<BaseExpr>, program: &Vec<&str>) {
-    match actual {
+    match actual
+    {
         Ok(tokens) => assert_eq!(tokens, expected),
         Err(e) => print_error(&e, program),
     }
@@ -14,9 +15,12 @@ fn compare_linewise(
     expected: Vec<BaseExpr>,
     program: &Vec<&str>,
 ) {
-    match actual {
-        Ok(tokens) => {
-            if tokens.len() != expected.len() {
+    match actual
+    {
+        Ok(tokens) =>
+        {
+            if tokens.len() != expected.len()
+            {
                 panic!(
                     "Expected and actual have differing lengths ({} and {})",
                     expected.len(),
@@ -26,7 +30,8 @@ fn compare_linewise(
 
             let it = tokens.iter().zip(expected.iter());
 
-            for (_, (act, exp)) in it.enumerate() {
+            for (_, (act, exp)) in it.enumerate()
+            {
                 assert_eq!(act, exp);
             }
         }
@@ -54,11 +59,13 @@ fn simple_variable() {
                     row: 0,
                     col_start: 0,
                     col_end: 3,
+                    generic_data: (),
                 },
             },
             row: 0,
             col_start: 0,
             col_end: 3,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -69,11 +76,13 @@ fn simple_variable() {
                     row: 1,
                     col_start: 0,
                     col_end: 13,
+                    generic_data: (),
                 },
             },
             row: 1,
             col_start: 0,
             col_end: 13,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -84,11 +93,13 @@ fn simple_variable() {
                     row: 2,
                     col_start: 0,
                     col_end: 3,
+                    generic_data: (),
                 },
             },
             row: 2,
             col_start: 0,
             col_end: 3,
+            generic_data: (),
         },
     ]);
 
@@ -114,11 +125,13 @@ fn simple_integer() {
                     row: 0,
                     col_start: 0,
                     col_end: 1,
+                    generic_data: (),
                 },
             },
             row: 0,
             col_start: 0,
             col_end: 1,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -127,11 +140,13 @@ fn simple_integer() {
                     row: 1,
                     col_start: 0,
                     col_end: 1,
+                    generic_data: (),
                 },
             },
             row: 1,
             col_start: 0,
             col_end: 1,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -140,11 +155,13 @@ fn simple_integer() {
                     row: 2,
                     col_start: 0,
                     col_end: 2,
+                    generic_data: (),
                 },
             },
             row: 2,
             col_start: 0,
             col_end: 2,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -153,11 +170,13 @@ fn simple_integer() {
                     row: 3,
                     col_start: 0,
                     col_end: 9,
+                    generic_data: (),
                 },
             },
             row: 3,
             col_start: 0,
             col_end: 9,
+            generic_data: (),
         },
     ]);
 
@@ -181,11 +200,13 @@ fn simple_boolean() {
                     row: 0,
                     col_start: 0,
                     col_end: 4,
+                    generic_data: (),
                 },
             },
             row: 0,
             col_start: 0,
             col_end: 4,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -194,11 +215,13 @@ fn simple_boolean() {
                     row: 1,
                     col_start: 0,
                     col_end: 5,
+                    generic_data: (),
                 },
             },
             row: 1,
             col_start: 0,
             col_end: 5,
+            generic_data: (),
         },
     ]);
 
@@ -224,11 +247,13 @@ fn simple_string() {
                     row: 0,
                     col_start: 0,
                     col_end: 6,
+                    generic_data: (),
                 },
             },
             row: 0,
             col_start: 0,
             col_end: 6,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -239,11 +264,13 @@ fn simple_string() {
                     row: 1,
                     col_start: 0,
                     col_end: 48,
+                    generic_data: (),
                 },
             },
             row: 1,
             col_start: 0,
             col_end: 48,
+            generic_data: (),
         },
     ]);
 
@@ -269,33 +296,39 @@ fn order_of_operations_test() {
                                 row: 0,
                                 col_start: 0,
                                 col_end: 1,
+                                generic_data: (),
                             }),
                             right: Box::new(RecExpr {
                                 data: RecExprData::Number { number: 2 },
                                 row: 0,
                                 col_start: 4,
                                 col_end: 5,
+                                generic_data: (),
                             }),
                         },
                         row: 0,
                         col_start: 0,
                         col_end: 5,
+                        generic_data: (),
                     }),
                     right: Box::new(RecExpr {
                         data: RecExprData::Number { number: 3 },
                         row: 0,
                         col_start: 8,
                         col_end: 9,
+                        generic_data: (),
                     }),
                 },
                 row: 0,
                 col_start: 0,
                 col_end: 9,
+                generic_data: (),
             },
         },
         row: 0,
         col_start: 0,
         col_end: 9,
+        generic_data: (),
     }]);
 
     compare_linewise(expressions, expected, &program_copy);
@@ -327,22 +360,26 @@ fn simple_arithmetic() {
                             row: 0,
                             col_start: 0,
                             col_end: 1,
+                            generic_data: (),
                         }),
                         right: Box::new(RecExpr {
                             data: RecExprData::Number { number: 2 },
                             row: 0,
                             col_start: 4,
                             col_end: 5,
+                            generic_data: (),
                         }),
                     },
                     row: 0,
                     col_start: 0,
                     col_end: 5,
+                    generic_data: (),
                 },
             },
             row: 0,
             col_start: 0,
             col_end: 5,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -353,22 +390,26 @@ fn simple_arithmetic() {
                             row: 1,
                             col_start: 0,
                             col_end: 2,
+                            generic_data: (),
                         }),
                         right: Box::new(RecExpr {
                             data: RecExprData::Number { number: 3 },
                             row: 1,
                             col_start: 5,
                             col_end: 6,
+                            generic_data: (),
                         }),
                     },
                     row: 1,
                     col_start: 0,
                     col_end: 6,
+                    generic_data: (),
                 },
             },
             row: 1,
             col_start: 0,
             col_end: 6,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -379,22 +420,26 @@ fn simple_arithmetic() {
                             row: 2,
                             col_start: 0,
                             col_end: 2,
+                            generic_data: (),
                         }),
                         right: Box::new(RecExpr {
                             data: RecExprData::Number { number: 3 },
                             row: 2,
                             col_start: 5,
                             col_end: 6,
+                            generic_data: (),
                         }),
                     },
                     row: 2,
                     col_start: 0,
                     col_end: 6,
+                    generic_data: (),
                 },
             },
             row: 2,
             col_start: 0,
             col_end: 6,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -405,22 +450,26 @@ fn simple_arithmetic() {
                             row: 3,
                             col_start: 0,
                             col_end: 2,
+                            generic_data: (),
                         }),
                         right: Box::new(RecExpr {
                             data: RecExprData::Number { number: 3 },
                             row: 3,
                             col_start: 5,
                             col_end: 6,
+                            generic_data: (),
                         }),
                     },
                     row: 3,
                     col_start: 0,
                     col_end: 6,
+                    generic_data: (),
                 },
             },
             row: 3,
             col_start: 0,
             col_end: 6,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -431,22 +480,26 @@ fn simple_arithmetic() {
                             row: 4,
                             col_start: 0,
                             col_end: 2,
+                            generic_data: (),
                         }),
                         right: Box::new(RecExpr {
                             data: RecExprData::Number { number: 3 },
                             row: 4,
                             col_start: 5,
                             col_end: 6,
+                            generic_data: (),
                         }),
                     },
                     row: 4,
                     col_start: 0,
                     col_end: 6,
+                    generic_data: (),
                 },
             },
             row: 4,
             col_start: 0,
             col_end: 6,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -457,22 +510,26 @@ fn simple_arithmetic() {
                             row: 5,
                             col_start: 0,
                             col_end: 2,
+                            generic_data: (),
                         }),
                         right: Box::new(RecExpr {
                             data: RecExprData::Number { number: 3 },
                             row: 5,
                             col_start: 5,
                             col_end: 6,
+                            generic_data: (),
                         }),
                     },
                     row: 5,
                     col_start: 0,
                     col_end: 6,
+                    generic_data: (),
                 },
             },
             row: 5,
             col_start: 0,
             col_end: 6,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -485,33 +542,39 @@ fn simple_arithmetic() {
                                     row: 6,
                                     col_start: 0,
                                     col_end: 2,
+                                    generic_data: (),
                                 }),
                                 right: Box::new(RecExpr {
                                     data: RecExprData::Number { number: 3 },
                                     row: 6,
                                     col_start: 5,
                                     col_end: 6,
+                                    generic_data: (),
                                 }),
                             },
                             row: 6,
                             col_start: 0,
                             col_end: 6,
+                            generic_data: (),
                         }),
                         right: Box::new(RecExpr {
                             data: RecExprData::Number { number: 4 },
                             row: 6,
                             col_start: 9,
                             col_end: 10,
+                            generic_data: (),
                         }),
                     },
                     row: 6,
                     col_start: 0,
                     col_end: 10,
+                    generic_data: (),
                 },
             },
             row: 6,
             col_start: 0,
             col_end: 10,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -522,6 +585,7 @@ fn simple_arithmetic() {
                             row: 7,
                             col_start: 0,
                             col_end: 2,
+                            generic_data: (),
                         }),
                         right: Box::new(RecExpr {
                             data: RecExprData::Add {
@@ -530,27 +594,32 @@ fn simple_arithmetic() {
                                     row: 7,
                                     col_start: 6,
                                     col_end: 7,
+                                    generic_data: (),
                                 }),
                                 right: Box::new(RecExpr {
                                     data: RecExprData::Number { number: 4 },
                                     row: 7,
                                     col_start: 10,
                                     col_end: 11,
+                                    generic_data: (),
                                 }),
                             },
                             row: 7,
                             col_start: 5,
                             col_end: 12,
+                            generic_data: (),
                         }),
                     },
                     row: 7,
                     col_start: 0,
                     col_end: 12,
+                    generic_data: (),
                 },
             },
             row: 7,
             col_start: 0,
             col_end: 12,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::Simple {
@@ -565,6 +634,7 @@ fn simple_arithmetic() {
                                             row: 8,
                                             col_start: 0,
                                             col_end: 2,
+                                            generic_data: (),
                                         }),
                                         right: Box::new(RecExpr {
                                             data: RecExprData::Add {
@@ -573,6 +643,7 @@ fn simple_arithmetic() {
                                                     row: 8,
                                                     col_start: 6,
                                                     col_end: 7,
+                                                    generic_data: (),
                                                 }),
                                                 right: Box::new(RecExpr {
                                                     data: RecExprData::Divide {
@@ -581,27 +652,32 @@ fn simple_arithmetic() {
                                                             row: 8,
                                                             col_start: 11,
                                                             col_end: 12,
+                                                            generic_data: (),
                                                         }),
                                                         right: Box::new(RecExpr {
                                                             data: RecExprData::Number { number: 2 },
                                                             row: 8,
                                                             col_start: 15,
                                                             col_end: 16,
+                                                            generic_data: (),
                                                         }),
                                                     },
                                                     row: 8,
                                                     col_start: 10,
                                                     col_end: 17,
+                                                    generic_data: (),
                                                 }),
                                             },
                                             row: 8,
                                             col_start: 5,
                                             col_end: 18,
+                                            generic_data: (),
                                         }),
                                     },
                                     row: 8,
                                     col_start: 0,
                                     col_end: 18,
+                                    generic_data: (),
                                 }),
                                 right: Box::new(RecExpr {
                                     data: RecExprData::Divide {
@@ -610,6 +686,7 @@ fn simple_arithmetic() {
                                             row: 8,
                                             col_start: 21,
                                             col_end: 22,
+                                            generic_data: (),
                                         }),
                                         right: Box::new(RecExpr {
                                             data: RecExprData::Power {
@@ -618,43 +695,51 @@ fn simple_arithmetic() {
                                                     row: 8,
                                                     col_start: 26,
                                                     col_end: 27,
+                                                    generic_data: (),
                                                 }),
                                                 right: Box::new(RecExpr {
                                                     data: RecExprData::Number { number: 7 },
                                                     row: 8,
                                                     col_start: 30,
                                                     col_end: 31,
+                                                    generic_data: (),
                                                 }),
                                             },
                                             row: 8,
                                             col_start: 25,
                                             col_end: 32,
+                                            generic_data: (),
                                         }),
                                     },
                                     row: 8,
                                     col_start: 21,
                                     col_end: 32,
+                                    generic_data: (),
                                 }),
                             },
                             row: 8,
                             col_start: 0,
                             col_end: 32,
+                            generic_data: (),
                         }),
                         right: Box::new(RecExpr {
                             data: RecExprData::Number { number: 8 },
                             row: 8,
                             col_start: 35,
                             col_end: 36,
+                            generic_data: (),
                         }),
                     },
                     row: 8,
                     col_start: 0,
                     col_end: 36,
+                    generic_data: (),
                 },
             },
             row: 8,
             col_start: 0,
             col_end: 36,
+            generic_data: (),
         },
     ]);
 
@@ -682,11 +767,13 @@ fn variable_assignment_test() {
                     row: 0,
                     col_start: 4,
                     col_end: 5,
+                    generic_data: (),
                 },
             },
             row: 0,
             col_start: 0,
             col_end: 5,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::VariableAssignment {
@@ -696,11 +783,13 @@ fn variable_assignment_test() {
                     row: 1,
                     col_start: 8,
                     col_end: 10,
+                    generic_data: (),
                 },
             },
             row: 1,
             col_start: 0,
             col_end: 10,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::VariableAssignment {
@@ -712,22 +801,26 @@ fn variable_assignment_test() {
                             row: 2,
                             col_start: 8,
                             col_end: 10,
+                            generic_data: (),
                         }),
                         right: Box::new(RecExpr {
                             data: RecExprData::Number { number: 2 },
                             row: 2,
                             col_start: 13,
                             col_end: 14,
+                            generic_data: (),
                         }),
                     },
                     row: 2,
                     col_start: 8,
                     col_end: 14,
+                    generic_data: (),
                 },
             },
             row: 2,
             col_start: 0,
             col_end: 14,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::VariableAssignment {
@@ -739,22 +832,26 @@ fn variable_assignment_test() {
                             row: 3,
                             col_start: 9,
                             col_end: 11,
+                            generic_data: (),
                         }),
                         right: Box::new(RecExpr {
                             data: RecExprData::Number { number: 2 },
                             row: 3,
                             col_start: 14,
                             col_end: 15,
+                            generic_data: (),
                         }),
                     },
                     row: 3,
                     col_start: 8,
                     col_end: 16,
+                    generic_data: (),
                 },
             },
             row: 3,
             col_start: 0,
             col_end: 16,
+            generic_data: (),
         },
         BaseExpr {
             data: BaseExprData::VariableAssignment {
@@ -766,11 +863,13 @@ fn variable_assignment_test() {
                     row: 4,
                     col_start: 8,
                     col_end: 16,
+                    generic_data: (),
                 },
             },
             row: 4,
             col_start: 0,
             col_end: 16,
+            generic_data: (),
         },
     ]);
 
