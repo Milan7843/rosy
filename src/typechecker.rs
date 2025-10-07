@@ -38,11 +38,12 @@ struct FunctionBinding {
 type FunctionEnvironment = Vec<FunctionBinding>;
 
 #[derive(Clone, PartialEq, Debug)]
-struct FunctionType {
-    name: String,
-    param_types: Vec<Type>,
-    return_type: Type,
-    content: Vec<BaseExpr<Type>>, // The content of the function with types filled in
+pub struct FunctionType {
+    pub(crate) name: String,
+    pub(crate) param_names: Vec<String>,
+    pub(crate) param_types: Vec<Type>,
+    pub(crate) return_type: Type,
+    pub(crate) content: Vec<BaseExpr<Type>>, // The content of the function with types filled in
 }
 
 struct TypeEnvironment {
@@ -84,24 +85,28 @@ fn print_function_env(func_env: &FunctionEnvironment) {
 fn add_default_functions_to_env(env: &mut TypeEnvironment) {
     env.functions.push(FunctionType {
         name: String::from("print"),
+        param_names: vec![String::from("value")],
         param_types: vec![Type::String],
         return_type: Type::Undefined,
         content: Vec::new(),
     });
     env.functions.push(FunctionType {
         name: String::from("print"),
+        param_names: vec![String::from("value")],
         param_types: vec![Type::Integer],
         return_type: Type::Undefined,
         content: Vec::new(),
     });
     env.functions.push(FunctionType {
         name: String::from("print"),
+        param_names: vec![String::from("value")],
         param_types: vec![Type::Float],
         return_type: Type::Undefined,
         content: Vec::new(),
     });
     env.functions.push(FunctionType {
         name: String::from("print"),
+        param_names: vec![String::from("value")],
         param_types: vec![Type::Boolean],
         return_type: Type::Undefined,
         content: Vec::new(),
@@ -109,24 +114,28 @@ fn add_default_functions_to_env(env: &mut TypeEnvironment) {
 
     env.functions.push(FunctionType {
         name: String::from("println"),
+        param_names: vec![String::from("value")],
         param_types: vec![Type::String],
         return_type: Type::Undefined,
         content: Vec::new(),
     });
     env.functions.push(FunctionType {
         name: String::from("println"),
+        param_names: vec![String::from("value")],
         param_types: vec![Type::Integer],
         return_type: Type::Undefined,
         content: Vec::new(),
     });
     env.functions.push(FunctionType {
         name: String::from("println"),
+        param_names: vec![String::from("value")],
         param_types: vec![Type::Float],
         return_type: Type::Undefined,
         content: Vec::new(),
     });
     env.functions.push(FunctionType {
         name: String::from("println"),
+        param_names: vec![String::from("value")],
         param_types: vec![Type::Boolean],
         return_type: Type::Undefined,
         content: Vec::new(),
@@ -241,9 +250,10 @@ fn find_matching_function_in_env(
                     // The function is successfully type-checked with the new parameter types
                     env.functions.push(FunctionType {
                         name: name.clone(),
+                        param_names: func.param_names.clone(),
                         param_types: param_types.clone(),
                         return_type: return_type.clone(),
-                        content: typed_base_expressions,
+                        content: typed_base_expressions.0,
                     });
                     return Ok(return_type);
                 }
@@ -328,7 +338,7 @@ fn find_in_scope(name: &String, scope: &TypeScope) -> Option<Type> {
 pub fn type_check_program(
     base_expressions: Vec<BaseExpr<()>>,
     print_results: bool,
-) -> Result<Vec<BaseExpr<Type>>, Error> {
+) -> Result<(Vec<BaseExpr<Type>>, Vec<FunctionType>), Error> {
     let mut env: TypeEnvironment = TypeEnvironment {
         scopes: Vec::new(),
         functions: Vec::new(),
@@ -352,7 +362,7 @@ pub fn type_check_program(
         &mut expected_return_type,
     )
     {
-        Ok(typed_base_expressions) => Ok(typed_base_expressions),
+        Ok((typed_base_expressions, typed_functions)) => Ok((typed_base_expressions, typed_functions)),
         Err(error) => Err(error),
     }
 }
@@ -366,7 +376,7 @@ fn type_check(
     func_env: &FunctionEnvironment,
     print_results: bool,
     expected_return_type: &mut Option<Type>,
-) -> Result<Vec<BaseExpr<Type>>, Error> {
+) -> Result<(Vec<BaseExpr<Type>>, Vec<FunctionType>), Error> {
     let mut typed_base_expressions: Vec<BaseExpr<Type>> = Vec::new();
 
     for base_expr in base_expressions
@@ -445,7 +455,7 @@ fn type_check(
                 // Typecheck the body in a new scope
                 env.scopes.push(Vec::new());
                 let body_typed =
-                    type_check(body, env, func_env, print_results, expected_return_type)?;
+                    type_check(body, env, func_env, print_results, expected_return_type)?.0;
                 env.scopes.pop();
 
                 let else_typed = match else_statement
@@ -459,7 +469,7 @@ fn type_check(
                             func_env,
                             print_results,
                             expected_return_type,
-                        )?;
+                        )?.0;
                         env.scopes.pop();
                         Some(Box::new(else_typed[0].clone()))
                     }
@@ -505,7 +515,7 @@ fn type_check(
                 // Typecheck the body in a new scope
                 env.scopes.push(Vec::new());
                 let body_typed =
-                    type_check(body, env, func_env, print_results, expected_return_type)?;
+                    type_check(body, env, func_env, print_results, expected_return_type)?.0;
                 env.scopes.pop();
 
                 let else_typed = match else_statement
@@ -519,7 +529,7 @@ fn type_check(
                             func_env,
                             print_results,
                             expected_return_type,
-                        )?;
+                        )?.0;
                         env.scopes.pop();
                         Some(Box::new(else_typed[0].clone()))
                     }
@@ -542,7 +552,7 @@ fn type_check(
                 // Typecheck the body in a new scope
                 env.scopes.push(Vec::new());
                 let body_typed =
-                    type_check(body, env, func_env, print_results, expected_return_type)?;
+                    type_check(body, env, func_env, print_results, expected_return_type)?.0;
                 env.scopes.pop();
 
                 typed_base_expressions.push(BaseExpr {
@@ -651,7 +661,7 @@ fn type_check(
                     env.scopes.last_mut().unwrap(),
                 );
                 let body_typed =
-                    type_check(body, env, func_env, print_results, expected_return_type)?;
+                    type_check(body, env, func_env, print_results, expected_return_type)?.0;
                 env.scopes.pop();
 
                 typed_base_expressions.push(BaseExpr {
@@ -688,7 +698,7 @@ fn type_check(
     print_type_env(&env);
 
     // If we have an expected return type, we return it
-    Ok(typed_base_expressions)
+    Ok((typed_base_expressions, env.functions.clone()))
 }
 
 // This function allows entry into type-checking a single rec-expr from a test

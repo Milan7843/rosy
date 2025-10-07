@@ -107,10 +107,10 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
 
     let desugared_base_expressions = desugarer::desugar(base_expressions);
 
-    let typed_base_expressions =
+    let typed_program =
         match typechecker::type_check_program(desugared_base_expressions.clone(), false)
         {
-            Ok(typed_base_expressions) => typed_base_expressions,
+            Ok(typed_program) => typed_program,
             Err(error) =>
             {
                 print_error(&error, &lines_copy);
@@ -118,7 +118,7 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
             }
         };
 
-    match crate::compiler::compile(typed_base_expressions)
+    match crate::compiler::compile(typed_program)
     {
         Ok(_) =>
         {}

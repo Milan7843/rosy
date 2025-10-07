@@ -14,9 +14,10 @@ use crate::tac;
 use crate::tokenizer::Error;
 use crate::typechecker;
 use crate::typechecker::Type;
+use crate::typechecker::FunctionType;
 
-pub fn compile(base_expressions: Vec<BaseExpr<Type>>) -> Result<Vec<Instruction>, Error> {
-    let tac_instructions = tac::generate_tac(base_expressions)?;
+pub fn compile(base_expressions: (Vec<BaseExpr<Type>>, Vec<FunctionType>)) -> Result<Vec<Instruction>, Error> {
+    let tac_instructions = tac::generate_tac(base_expressions.0, base_expressions.1)?;
 
     let mut instructions = Vec::new();
 

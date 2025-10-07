@@ -7,6 +7,7 @@ use crate::parser::RecExpr;
 use crate::parser::RecExprData;
 use crate::tokenizer::Error;
 use crate::typechecker::Type;
+use crate::typechecker::FunctionType;
 
 #[derive(Debug, Clone)]
 pub enum TacInstruction {
@@ -14,10 +15,10 @@ pub enum TacInstruction {
     BinOp(String, TacValue, BinOp, TacValue),
     UnaryOp(String, UnOp, TacValue),
     Goto(String),
-    If(String, String),
+    If(TacValue, String),
     Label(String),
-    Call(String, Vec<String>, Option<String>),
-    Return(Option<String>),
+    Call(String, Vec<TacValue>, Option<String>),
+    Return(Option<TacValue>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -32,6 +33,8 @@ pub enum BinOp {
     Le,
     Gt,
     Ge,
+    And,
+    Or,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -47,10 +50,72 @@ pub enum TacValue {
     StringLiteral(String),
 }
 
-pub fn generate_tac(program: Vec<BaseExpr<Type>>) -> Result<Vec<TacInstruction>, Error> {
+#[derive(Debug, Clone)]
+pub struct TacFunction {
+    name: String,
+    params: Vec<Type>,
+    return_type: Type,
+    label: String,
+}
+
+struct TacEnvironment {
+    functions: Vec<TacFunction>,
+}
+
+// Finds a function in the environment by name and argument types
+// Returns the function label if found
+fn find_function(env: &TacEnvironment, name: &str, arg_types: Vec<Type>) -> Result<(String, Type), Error> {
+    for func in &env.functions
+    {
+        if func.name == name && func.params == arg_types
+        {
+            return Ok((func.label.clone(), func.return_type.clone()));
+        }
+    }
+
+    Err(Error::SimpleError {
+        message: format!("Function '{}' with specified argument types not found", name),
+    })
+}
+
+fn add_functions(functions: Vec<FunctionType>, env: &mut TacEnvironment, instructions: &mut Vec<TacInstruction>, temp_counter: &mut i64, label_counter: &mut i64) -> Result<(), Error> {
+    for function in functions
+    {
+        let label = format!("func_{}", function.name);
+
+        env.functions.push(TacFunction {
+            name: function.name.clone(),
+            params: function.param_types.clone(),
+            return_type: function.return_type.clone(),
+            label: label.clone(),
+        });
+
+        // Now we can generate TAC for the function body
+        instructions.push(TacInstruction::Label(label));
+        
+        for expr in function.content
+        {
+            generate_tac_for_base_expr(
+                &expr,
+                instructions,
+                temp_counter,
+                label_counter,
+                env,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+pub fn generate_tac(program: Vec<BaseExpr<Type>>, functions: Vec<FunctionType>) -> Result<Vec<TacInstruction>, Error> {
     let mut instructions = Vec::new();
     let mut temp_counter = 0;
     let mut label_counter = 0;
+
+    // First we preload the functions into the environment
+    let mut env = TacEnvironment { functions: Vec::new() };
+    add_functions(functions, &mut env, &mut instructions, &mut temp_counter,
+        &mut label_counter)?;
 
     for expr in program
     {
@@ -59,6 +124,7 @@ pub fn generate_tac(program: Vec<BaseExpr<Type>>) -> Result<Vec<TacInstruction>,
             &mut instructions,
             &mut temp_counter,
             &mut label_counter,
+            &mut env,
         )?;
     }
 
@@ -72,12 +138,13 @@ fn generate_tac_for_base_expr(
     instructions: &mut Vec<TacInstruction>,
     temp_counter: &mut i64,
     label_counter: &mut i64,
+    env: &mut TacEnvironment,
 ) -> Result<(), Error> {
     match &expr.data
     {
         BaseExprData::VariableAssignment { var_name, expr } =>
         {
-            let value = generate_tac_for_rec_expr(expr, instructions, temp_counter)?;
+            let value = generate_tac_for_rec_expr(expr, instructions, temp_counter, env)?;
             instructions.push(TacInstruction::Assign(var_name.clone(), value));
         }
         BaseExprData::ForLoop {
@@ -99,20 +166,20 @@ fn generate_tac_for_base_expr(
             // Start of loop
             instructions.push(TacInstruction::Label(start_label.clone()));
             // Condition check
-            let until_value = generate_tac_for_rec_expr(until, instructions, temp_counter)?;
+            let until_value = generate_tac_for_rec_expr(until, instructions, temp_counter, env)?;
             let cond_temp = format!("t{}", temp_counter);
             *temp_counter += 1;
             instructions.push(TacInstruction::BinOp(
                 cond_temp.clone(),
                 TacValue::Variable(var_name.clone()),
-                BinOp::Ge,
+                BinOp::Lt,
                 until_value,
             ));
-            instructions.push(TacInstruction::If(cond_temp, end_label.clone()));
+            instructions.push(TacInstruction::If(TacValue::Variable(cond_temp), end_label.clone()));
             // Loop body
             for body_expr in body
             {
-                generate_tac_for_base_expr(body_expr, instructions, temp_counter, label_counter)?;
+                generate_tac_for_base_expr(body_expr, instructions, temp_counter, label_counter, env)?;
             }
             // Increment loop variable
             let increment_temp = format!("t{}", temp_counter);
@@ -132,6 +199,97 @@ fn generate_tac_for_base_expr(
             // End of loop
             instructions.push(TacInstruction::Label(end_label));
         }
+        BaseExprData::Return { return_value } =>
+        {
+            if let Some(ret_expr) = return_value
+            {
+                let ret_value = generate_tac_for_rec_expr(ret_expr, instructions, temp_counter, env)?;
+                instructions.push(TacInstruction::Return(Some(ret_value)));
+            }
+            else
+            {
+                instructions.push(TacInstruction::Return(None));
+            }
+        }
+        BaseExprData::IfStatement { condition, body, else_statement } => {
+            let next_label = format!("L{}", label_counter);
+            *label_counter += 1;
+            let end_label = format!("L{}", label_counter);
+            *label_counter += 1;
+
+            // Condition
+            let cond_value = generate_tac_for_rec_expr(condition, instructions, temp_counter, env)?;
+
+            // Jump to the next statement (either end of if-sequence or else branch) if condition is false
+            instructions.push(TacInstruction::If(
+                cond_value,
+                next_label.clone(),
+            ));
+
+            // If body
+            for body_expr in body
+            {
+                generate_tac_for_base_expr(body_expr, instructions, temp_counter, label_counter, env)?;
+            }
+
+            instructions.push(TacInstruction::Goto(end_label.clone()));
+
+            match else_statement {
+                Some(else_expression) => {
+                    instructions.push(TacInstruction::Label(next_label));
+                    generate_tac_for_base_expr(else_expression, instructions, temp_counter, label_counter, env)?;
+                }
+                None => {
+                    // No else branch, just label the next statement
+                    instructions.push(TacInstruction::Label(next_label));
+                }
+            }
+            instructions.push(TacInstruction::Label(end_label));
+        }
+        BaseExprData::ElseIfStatement { condition, body, else_statement } => {
+            let next_label = format!("L{}", label_counter);
+            *label_counter += 1;
+            let end_label = format!("L{}", label_counter);
+            *label_counter += 1;
+
+
+            // Condition
+            let cond_value = generate_tac_for_rec_expr(condition, instructions, temp_counter, env)?;
+
+            // Jump to the next statement (either end of if-sequence or else branch) if condition is false
+            instructions.push(TacInstruction::If(
+                cond_value,
+                next_label.clone(),
+            ));
+
+            // If body
+            for body_expr in body
+            {
+                generate_tac_for_base_expr(body_expr, instructions, temp_counter, label_counter, env)?;
+            }
+
+            instructions.push(TacInstruction::Goto(end_label.clone()));
+
+            match else_statement {
+                Some(else_expression) => {
+                    // No else branch, just label the next statement
+                    instructions.push(TacInstruction::Label(next_label));
+                    generate_tac_for_base_expr(else_expression, instructions, temp_counter, label_counter, env)?;
+                }
+                None => {
+                    // No else branch, just label the next statement
+                    instructions.push(TacInstruction::Label(next_label));
+                }
+            }
+            instructions.push(TacInstruction::Label(end_label));
+        }
+        BaseExprData::ElseStatement { body } => {
+            // Else body
+            for body_expr in body
+            {
+                generate_tac_for_base_expr(body_expr, instructions, temp_counter, label_counter, env)?;
+            }
+        }
         _ =>
         {
             // For other base expressions, we can ignore them or handle as needed
@@ -144,31 +302,113 @@ fn generate_tac_for_rec_expr(
     expr: &RecExpr<Type>,
     instructions: &mut Vec<TacInstruction>,
     temp_counter: &mut i64,
+    env: &mut TacEnvironment,
 ) -> Result<TacValue, Error> {
     match &expr.data
     {
         RecExprData::Number { number } => Ok(TacValue::Constant(*number)),
         RecExprData::String { value } => Ok(TacValue::StringLiteral(value.clone())),
         RecExprData::Variable { name } => Ok(TacValue::Variable(name.clone())),
+        RecExprData::Boolean { value } => Ok(TacValue::Constant(if *value { 1 } else { 0 })),
         RecExprData::Add { left, right } =>
         {
-            generate_binary_op_tac(&BinOp::Add, left, right, instructions, temp_counter)
+            generate_binary_op_tac(&BinOp::Add, left, right, instructions, temp_counter, env)
         }
         RecExprData::Subtract { left, right } =>
         {
-            generate_binary_op_tac(&BinOp::Sub, left, right, instructions, temp_counter)
+            generate_binary_op_tac(&BinOp::Sub, left, right, instructions, temp_counter, env)
         }
         RecExprData::Multiply { left, right } =>
         {
-            generate_binary_op_tac(&BinOp::Mul, left, right, instructions, temp_counter)
+            generate_binary_op_tac(&BinOp::Mul, left, right, instructions, temp_counter, env)
         }
         RecExprData::Divide { left, right } =>
         {
-            generate_binary_op_tac(&BinOp::Div, left, right, instructions, temp_counter)
+            generate_binary_op_tac(&BinOp::Div, left, right, instructions, temp_counter, env)
+        }
+        RecExprData::Equals { left, right } =>
+        {
+            generate_binary_op_tac(&BinOp::Eq, left, right, instructions, temp_counter, env)
+        }
+        RecExprData::NotEquals { left, right } =>
+        {
+            generate_binary_op_tac(&BinOp::Ne, left, right, instructions, temp_counter, env)
+        }
+        RecExprData::LessThan { left, right } =>
+        {
+            generate_binary_op_tac(&BinOp::Lt, left, right, instructions, temp_counter, env)
+        }
+        RecExprData::LessThanOrEqual { left, right } =>
+        {
+            generate_binary_op_tac(&BinOp::Le, left, right, instructions, temp_counter, env)
+        }
+        RecExprData::GreaterThan { left, right } =>
+        {
+            generate_binary_op_tac(&BinOp::Gt, left, right, instructions, temp_counter, env)
+        }
+        RecExprData::GreaterThanOrEqual { left, right } =>
+        {
+            generate_binary_op_tac(&BinOp::Ge, left, right, instructions, temp_counter, env)
+        }
+        RecExprData::Or { left, right } =>
+        {
+            generate_binary_op_tac(&BinOp::Or, left, right, instructions, temp_counter, env)
+        }
+        RecExprData::And { left, right } =>
+        {
+            generate_binary_op_tac(&BinOp::And, left, right, instructions, temp_counter, env)
+        }
+
+        RecExprData::Not { right } =>
+        {
+            let operand = generate_tac_for_rec_expr(right, instructions, temp_counter, env)?;
+            let temp_var = format!("t{}", temp_counter);
+            *temp_counter += 1;
+            instructions.push(TacInstruction::UnaryOp(
+                temp_var.clone(),
+                UnOp::Neg,
+                operand,
+            ));
+            Ok(TacValue::Variable(temp_var))
+        }
+
+        RecExprData::List { elements } =>
+        {
+            Err(Error::SimpleError {
+                message: "List expressions are not supported in TAC generation".to_string(),
+            })
+        }
+
+        RecExprData::FunctionCall { function_name, args } => {
+            let mut arg_values = Vec::new();
+            let mut arg_types = Vec::new();
+            for arg in args {
+                let arg_value = generate_tac_for_rec_expr(arg, instructions, temp_counter, env)?;
+                arg_values.push(arg_value);
+                arg_types.push(arg.generic_data.clone());
+            }
+            let (function_label, return_type) = match find_function(env, function_name, arg_types) {
+                Ok((label, return_type)) => (label, return_type),
+                Err(e) => return Err(e),
+            };
+
+            match return_type {
+                Type::Undefined => {
+                    instructions.push(TacInstruction::Call(function_label, arg_values, None));
+                    return Ok(TacValue::Variable("TODO fix undefined return type".to_string())); // or some other placeholder for void
+                }
+                _ => {
+                    // The return value will be stored in temp_var
+                    let temp_var = format!("t{}", temp_counter);
+                    *temp_counter += 1;
+                    instructions.push(TacInstruction::Call(function_label, arg_values, Some(temp_var.clone())));
+                    Ok(TacValue::Variable(temp_var))
+                }
+            }
         }
 
         _ => Err(Error::SimpleError {
-            message: "Unsupported expression type".to_string(),
+            message: format!("Unsupported expression type {:?}", expr.data),
         }),
     }
 }
@@ -179,9 +419,10 @@ fn generate_binary_op_tac(
     right: &RecExpr<Type>,
     instructions: &mut Vec<TacInstruction>,
     temp_counter: &mut i64,
+    env: &mut TacEnvironment,
 ) -> Result<TacValue, Error> {
-    let left_val = generate_tac_for_rec_expr(left, instructions, temp_counter)?;
-    let right_val = generate_tac_for_rec_expr(right, instructions, temp_counter)?;
+    let left_val = generate_tac_for_rec_expr(left, instructions, temp_counter, env)?;
+    let right_val = generate_tac_for_rec_expr(right, instructions, temp_counter, env)?;
 
     let temp_var = format!("t{}", temp_counter);
     *temp_counter += 1;
@@ -222,6 +463,8 @@ fn print_instruction(instr: &TacInstruction) {
                 BinOp::Le => "<=",
                 BinOp::Gt => ">",
                 BinOp::Ge => ">=",
+                BinOp::And => "&",
+                BinOp::Or => "|",
                 _ => unreachable!(),
             };
             println!("{} = {:?} {} {:?}", result, left, op_str, right);
@@ -241,7 +484,7 @@ fn print_instruction(instr: &TacInstruction) {
         }
         TacInstruction::If(cond, label) =>
         {
-            println!("if {} goto {}", cond, label);
+            println!("if not {:?} goto {}", cond, label);
         }
         TacInstruction::Label(label) =>
         {
@@ -251,18 +494,18 @@ fn print_instruction(instr: &TacInstruction) {
         {
             if let Some(ret_var) = ret
             {
-                println!("{} = call {}({})", ret_var, func, args.join(", "));
+                println!("{} = call {}({:?})", ret_var, func, args);
             }
             else
             {
-                println!("call {}({})", func, args.join(", "));
+                println!("call {}({:?})", func, args);
             }
         }
         TacInstruction::Return(ret) =>
         {
             if let Some(ret_var) = ret
             {
-                println!("return {}", ret_var);
+                println!("return {:?}", ret_var);
             }
             else
             {

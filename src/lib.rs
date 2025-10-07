@@ -9,3 +9,6 @@ pub mod pipeline;
 pub mod tac;
 pub mod tokenizer;
 pub mod typechecker;
+pub mod codegenerator;
+pub mod livenessanalysis;
+pub mod uniquify;
