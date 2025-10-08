@@ -49,8 +49,7 @@ pub enum Instruction {
 }
 
 fn get_register_is_extended(reg: &Register) -> bool {
-    match reg
-    {
+    match reg {
         Register::General(_) => false,
         Register::Extended(_) => true,
     }
@@ -63,10 +62,8 @@ fn get_rex_byte(w: bool, r: bool, x: bool, b: bool) -> u8 {
 fn get_rm(reg: Register) -> u8 {
     // 7 6 | 5 4 3 | 2 1 0
     // MOD |  REG  |  R/M
-    match reg
-    {
-        Register::General(register_type) => match register_type
-        {
+    match reg {
+        Register::General(register_type) => match register_type {
             RegisterType::RAX => 0,
             RegisterType::RCX => 1,
             RegisterType::RDX => 2,
@@ -76,14 +73,10 @@ fn get_rm(reg: Register) -> u8 {
             RegisterType::RSI => 6,
             RegisterType::RDI => 7,
         },
-        Register::Extended(num) =>
-        {
-            if num < 8
-            {
+        Register::Extended(num) => {
+            if num < 8 {
                 num
-            }
-            else
-            {
+            } else {
                 panic!("Register number out of range for R/M field");
             }
         }
@@ -93,16 +86,11 @@ fn get_rm(reg: Register) -> u8 {
 pub fn assemble(instructions: Vec<Instruction>) -> Vec<u8> {
     let mut machine_code = Vec::new();
 
-    for instr in instructions
-    {
-        match instr
-        {
-            Instruction::Mov(dest, src) =>
-            {
-                match (dest, src)
-                {
-                    (Argument::Register(r1), Argument::Register(r2)) =>
-                    {
+    for instr in instructions {
+        match instr {
+            Instruction::Mov(dest, src) => {
+                match (dest, src) {
+                    (Argument::Register(r1), Argument::Register(r2)) => {
                         let rex_b = get_register_is_extended(&r1);
                         let rex_r = get_register_is_extended(&r2);
 
@@ -112,16 +100,14 @@ pub fn assemble(instructions: Vec<Instruction>) -> Vec<u8> {
                         let mod_rm = 0b11_000_000 | (get_rm(r2) << 3) | get_rm(r1);
                         write_u8(&mut machine_code, mod_rm);
                     }
-                    (Argument::Register(r), Argument::Immediate(imm)) =>
-                    {
+                    (Argument::Register(r), Argument::Immediate(imm)) => {
                         let rex_b = get_register_is_extended(&r);
 
                         write_u8(&mut machine_code, get_rex_byte(true, false, false, rex_b)); // REX.W prefix
                         write_u8(&mut machine_code, 0xB8 | get_rm(r)); // MOV r64, imm64
                         write_u64(&mut machine_code, imm as u64);
                     }
-                    (Argument::Register(r), Argument::MemoryAddress(m)) =>
-                    {
+                    (Argument::Register(r), Argument::MemoryAddress(m)) => {
                         let rex_b = get_register_is_extended(&r);
 
                         write_u8(&mut machine_code, get_rex_byte(true, false, false, rex_b)); // REX.W prefix
@@ -131,8 +117,7 @@ pub fn assemble(instructions: Vec<Instruction>) -> Vec<u8> {
                         write_u8(&mut machine_code, mod_rm);
                         write_u32(&mut machine_code, m as u32); // 32-bit displacement
                     }
-                    (Argument::MemoryAddress(m), Argument::Register(r)) =>
-                    {
+                    (Argument::MemoryAddress(m), Argument::Register(r)) => {
                         let rex_r = get_register_is_extended(&r);
 
                         write_u8(&mut machine_code, get_rex_byte(true, rex_r, false, false)); // REX.W prefix
@@ -141,19 +126,15 @@ pub fn assemble(instructions: Vec<Instruction>) -> Vec<u8> {
                         write_u8(&mut machine_code, mod_rm);
                         write_u32(&mut machine_code, m as u32); // 32-bit displacement
                     }
-                    _ =>
-                    {
+                    _ => {
                         // Placeholder for other MOV cases
                         unimplemented!("MOV not implemented yet");
                     }
                 }
             }
-            Instruction::Add(dest, src) =>
-            {
-                match (dest, src)
-                {
-                    (Argument::Register(r1), Argument::Register(r2)) =>
-                    {
+            Instruction::Add(dest, src) => {
+                match (dest, src) {
+                    (Argument::Register(r1), Argument::Register(r2)) => {
                         let rex_b = get_register_is_extended(&r1);
                         let rex_r = get_register_is_extended(&r2);
 
@@ -163,8 +144,7 @@ pub fn assemble(instructions: Vec<Instruction>) -> Vec<u8> {
                         let mod_rm = 0b11_000_000 | (get_rm(r2) << 3) | get_rm(r1);
                         write_u8(&mut machine_code, mod_rm);
                     }
-                    (Argument::Register(r), Argument::Immediate(imm)) =>
-                    {
+                    (Argument::Register(r), Argument::Immediate(imm)) => {
                         let rex_b = get_register_is_extended(&r);
 
                         write_u8(&mut machine_code, get_rex_byte(true, false, false, rex_b)); // REX.W prefix
@@ -173,8 +153,7 @@ pub fn assemble(instructions: Vec<Instruction>) -> Vec<u8> {
                         write_u8(&mut machine_code, mod_rm);
                         write_u32(&mut machine_code, imm as u32); // 32-bit immediate
                     }
-                    (Argument::MemoryAddress(m), Argument::Register(r)) =>
-                    {
+                    (Argument::MemoryAddress(m), Argument::Register(r)) => {
                         let rex_r = get_register_is_extended(&r);
 
                         write_u8(&mut machine_code, get_rex_byte(true, rex_r, false, false)); // REX.W prefix
@@ -184,8 +163,7 @@ pub fn assemble(instructions: Vec<Instruction>) -> Vec<u8> {
                         write_u8(&mut machine_code, mod_rm);
                         write_u32(&mut machine_code, m as u32); // 32-bit displacement
                     }
-                    (Argument::Register(r), Argument::MemoryAddress(m)) =>
-                    {
+                    (Argument::Register(r), Argument::MemoryAddress(m)) => {
                         let rex_b = get_register_is_extended(&r);
 
                         write_u8(&mut machine_code, get_rex_byte(true, false, false, rex_b)); // REX.W prefix
@@ -195,27 +173,23 @@ pub fn assemble(instructions: Vec<Instruction>) -> Vec<u8> {
                         write_u8(&mut machine_code, mod_rm);
                         write_u32(&mut machine_code, m as u32); // 32-bit displacement
                     }
-                    (Argument::MemoryAddress(m), Argument::Immediate(imm)) =>
-                    {
+                    (Argument::MemoryAddress(m), Argument::Immediate(imm)) => {
                         write_u8(&mut machine_code, get_rex_byte(true, false, false, false)); // REX.W prefix
                         write_u8(&mut machine_code, 0x81); // ADD r/m64, imm32
                         let mod_rm = 0b00_000_000 | (0b000 << 3) | 0b101; // MOD=00, REG=000 (ADD), R/M=101
                         write_u8(&mut machine_code, mod_rm);
                         write_u32(&mut machine_code, imm as u32); // 32-bit immediate
                     }
-                    _ =>
-                    {
+                    _ => {
                         // Placeholder for other ADD cases
                         unimplemented!("ADD not implemented yet");
                     }
                 }
             }
-            Instruction::Nop =>
-            {
+            Instruction::Nop => {
                 machine_code.push(0x90); // NOP opcode
             }
-            _ =>
-            {
+            _ => {
                 // Placeholder for other instructions
                 unimplemented!("Instruction {:?} not implemented yet", instr);
             }

@@ -9,8 +9,7 @@ fn str_to_string(strs: Vec<&str>) -> Vec<String> {
 }
 
 fn compare(actual: Result<Terminal, String>, expected: Terminal) {
-    match actual
-    {
+    match actual {
         Ok(tokens) => assert_eq!(tokens, expected),
         Err(e) => panic!("{}", e),
     }

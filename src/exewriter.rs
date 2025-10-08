@@ -63,8 +63,7 @@ fn write_headers(file: &mut File) -> std::io::Result<()> {
     write_u16(&mut file_headers, 0x0000); // 0x24: e_oemid
     write_u16(&mut file_headers, 0x0000); // 0x26: e_oeminfo
                                           // e_res2 (20 bytes)
-    for _ in 0..10
-    {
+    for _ in 0..10 {
         write_u16(&mut file_headers, 0x0000); // 0x28..0x3B
     }
     write_u32(&mut file_headers, 0x80); // 0x3C - 0x3F: pointer to PE header (just after this but we could leave room for a DOS stub)
@@ -390,8 +389,7 @@ fn write_idata(idata: &mut Vec<u8>, imports: &mut [ImportEntry], rva_start: u32)
     let mut hint_name_reference_indices_iat = Vec::<Vec<usize>>::new();
 
     // Import Directory Table (20 bytes each)
-    for _ in imports.iter()
-    {
+    for _ in imports.iter() {
         let ilt_reference_index = write_u32(idata, 0); // Placeholder for OriginalFirstThunk (RVA to Import Lookup Table)
         write_u32(idata, 0x00000000); // TimeDateStamp
         write_u32(idata, 0x00000000); // ForwarderChain
@@ -411,16 +409,14 @@ fn write_idata(idata: &mut Vec<u8>, imports: &mut [ImportEntry], rva_start: u32)
     write_u32(idata, 0x00000000); // FirstThunk
 
     // Now for each import, write the ILT
-    for (import_index, import) in imports.iter().enumerate()
-    {
+    for (import_index, import) in imports.iter().enumerate() {
         let mut ilt_hint_name_indices = Vec::<usize>::new();
 
         // RVA to this import's ILT (which is about to be written)
         let ilt_rva = rva_start + idata.len() as u32;
 
         // Import Lookup Table (ILT) - array of RVAs (8 bytes each)
-        for _ in &import.function_names
-        {
+        for _ in &import.function_names {
             let hint_name_index = write_u64(idata, 0); // Placeholder for RVA to Hint/Name table
             ilt_hint_name_indices.push(hint_name_index);
         }
@@ -436,16 +432,14 @@ fn write_idata(idata: &mut Vec<u8>, imports: &mut [ImportEntry], rva_start: u32)
     let total_iat_rva = rva_start + idata.len() as u32;
 
     // Now for each import, write the IAT
-    for (import_index, import) in imports.into_iter().enumerate()
-    {
+    for (import_index, import) in imports.into_iter().enumerate() {
         let mut iat_hint_name_indices = Vec::<usize>::new();
 
         // RVA to this import's IAT (which is about to be written)
         let iat_rva = rva_start + idata.len() as u32;
 
         // Import Address Table (IAT) - array of RVAs (8 bytes each)
-        for (function_index, _) in import.function_names.iter().enumerate()
-        {
+        for (function_index, _) in import.function_names.iter().enumerate() {
             let hint_name_index = write_u64(idata, 0); // Placeholder for RVA to Hint/Name table
             iat_hint_name_indices.push(hint_name_index);
             let function_iat_rva = iat_rva + (function_index as u32) * 8;
@@ -463,18 +457,15 @@ fn write_idata(idata: &mut Vec<u8>, imports: &mut [ImportEntry], rva_start: u32)
     let total_iat_size = (total_iat_end - total_iat_start) as u32;
 
     // Now writing the hint/name table
-    for (import_index, import) in imports.iter().enumerate()
-    {
-        for (function_index, function_name) in import.function_names.clone().iter().enumerate()
-        {
+    for (import_index, import) in imports.iter().enumerate() {
+        for (function_index, function_name) in import.function_names.clone().iter().enumerate() {
             let hint_name_rva = rva_start + idata.len() as u32;
             write_u16(idata, 0x017C); // Hint (index to export name pointer table)
             write_bytes(idata, function_name.as_bytes()); // Name of the function to import
             write_u8(idata, 0); // Null terminator
 
             // Accounting for possible odd name lengths
-            if (function_name.len() + 1) % 2 == 1
-            {
+            if (function_name.len() + 1) % 2 == 1 {
                 write_u8(idata, 0);
             }
 
@@ -493,16 +484,14 @@ fn write_idata(idata: &mut Vec<u8>, imports: &mut [ImportEntry], rva_start: u32)
     }
 
     // Now writing the DLL names
-    for (import_index, import) in imports.iter().enumerate()
-    {
+    for (import_index, import) in imports.iter().enumerate() {
         let name_rva = rva_start + idata.len() as u32;
 
         write_bytes(idata, import.dll_name.as_bytes());
         write_u8(idata, 0); // Null terminator
 
         // Accounting for possible odd name lengths
-        if (import.dll_name.len() + 1) % 2 == 1
-        {
+        if (import.dll_name.len() + 1) % 2 == 1 {
             write_u8(idata, 0);
         }
 
@@ -539,8 +528,7 @@ fn write_file_bytes(file: &mut impl Write, data: &[u8]) -> std::io::Result<()> {
 fn write_file_zeroes(file: &mut impl Write, count: usize) -> std::io::Result<()> {
     const CHUNK: [u8; 256] = [0; 256];
     let mut remaining = count;
-    while remaining > 0
-    {
+    while remaining > 0 {
         let write_now = remaining.min(256);
         file.write_all(&CHUNK[..write_now])?;
         remaining -= write_now;
@@ -585,8 +573,7 @@ fn write_zeroes(buf: &mut Vec<u8>, count: usize) -> usize {
 }
 
 fn write_at_u8(buf: &mut Vec<u8>, at: usize, value: u8) {
-    if buf.len() <= at
-    {
+    if buf.len() <= at {
         buf.resize(at + 1, 0);
     }
     buf[at] = value;
@@ -594,8 +581,7 @@ fn write_at_u8(buf: &mut Vec<u8>, at: usize, value: u8) {
 
 fn write_at_u16(buf: &mut Vec<u8>, at: usize, value: u16) {
     let bytes = value.to_le_bytes();
-    if buf.len() < at + 2
-    {
+    if buf.len() < at + 2 {
         buf.resize(at + 2, 0);
     }
     buf[at..at + 2].copy_from_slice(&bytes);
@@ -603,8 +589,7 @@ fn write_at_u16(buf: &mut Vec<u8>, at: usize, value: u16) {
 
 fn write_at_u32(buf: &mut Vec<u8>, at: usize, value: u32) {
     let bytes = value.to_le_bytes();
-    if buf.len() < at + 4
-    {
+    if buf.len() < at + 4 {
         buf.resize(at + 4, 0);
     }
     buf[at..at + 4].copy_from_slice(&bytes);
@@ -612,28 +597,23 @@ fn write_at_u32(buf: &mut Vec<u8>, at: usize, value: u32) {
 
 fn write_at_u64(buf: &mut Vec<u8>, at: usize, value: u64) {
     let bytes = value.to_le_bytes();
-    if buf.len() < at + 8
-    {
+    if buf.len() < at + 8 {
         buf.resize(at + 8, 0);
     }
     buf[at..at + 8].copy_from_slice(&bytes);
 }
 
 fn write_at_bytes(buf: &mut Vec<u8>, at: usize, data: &[u8]) {
-    if buf.len() < at + data.len()
-    {
+    if buf.len() < at + data.len() {
         buf.resize(at + data.len(), 0);
     }
     buf[at..at + data.len()].copy_from_slice(data);
 }
 
 fn write_at_zeroes(buf: &mut Vec<u8>, at: usize, count: usize) {
-    if buf.len() < at + count
-    {
+    if buf.len() < at + count {
         buf.resize(at + count, 0);
-    }
-    else
-    {
+    } else {
         buf[at..at + count].fill(0);
     }
 }

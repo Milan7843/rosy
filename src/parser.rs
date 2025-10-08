@@ -217,22 +217,19 @@ pub fn parse(path: &std::path::PathBuf) -> Result<Vec<BaseExpr<()>>, Error> {
 
 pub fn parse_strings(lines: Vec<&str>) -> Result<Vec<BaseExpr<()>>, Error> {
     // First: tokenize the lines
-    let token_lines = match tokenizer::tokenize(lines)
-    {
+    let token_lines = match tokenizer::tokenize(lines) {
         Ok(token_lines) => token_lines,
         Err(error_message) => return Err(error_message),
     };
 
     // Second, parse the token lines into a list of base expresssions
-    let base_expressions = match get_base_expressions(&token_lines)
-    {
+    let base_expressions = match get_base_expressions(&token_lines) {
         Ok(tokens) => tokens,
         Err(error_message) => return Err(error_message),
     };
 
     // Third, merge subsequent if statements
-    let merged_base_expressions = match merge_if_statements(base_expressions)
-    {
+    let merged_base_expressions = match merge_if_statements(base_expressions) {
         Ok(base_expressions) => base_expressions,
         Err(error_message) => return Err(error_message),
     };
@@ -246,11 +243,9 @@ fn get_last_occurence(
 ) -> Result<(SymbolType, usize), Error> {
     let mut indentation_depth = 0;
 
-    for (i, token) in tokens.iter().enumerate().rev()
-    {
+    for (i, token) in tokens.iter().enumerate().rev() {
         // Keep track of the indentation depth
-        match token.data
-        {
+        match token.data {
             TokenData::Symbol {
                 symbol_type: SymbolType::ParenthesisOpen,
             } => indentation_depth -= 1,
@@ -263,35 +258,29 @@ fn get_last_occurence(
             TokenData::Symbol {
                 symbol_type: SymbolType::SquareBracketClosed,
             } => indentation_depth += 1,
-            _ =>
-            {}
+            _ => {}
         }
         // We are only looking for top-level symbols,
         // so if we are inside a parenthesis, we skip
-        if indentation_depth > 0
-        {
+        if indentation_depth > 0 {
             continue;
         }
 
-        for symbol_type in &match_on
-        {
+        for symbol_type in &match_on {
             if token.data
                 == (TokenData::Symbol {
                     symbol_type: symbol_type.clone(),
                 })
             {
                 // Special case handling: difference between unary and binary minus
-                if symbol_type == &SymbolType::Minus
-                {
-                    if i == 0
-                    {
+                if symbol_type == &SymbolType::Minus {
+                    if i == 0 {
                         return Err(Error::SimpleError {
                             // if its the last token, it must be unary
                             message: format!("No occurances found"),
                         });
                     }
-                    match tokens[i - 1].data
-                    {
+                    match tokens[i - 1].data {
                         TokenData::Symbol {
                             symbol_type: SymbolType::ParenthesisOpen,
                         }
@@ -356,11 +345,9 @@ fn get_last_occurence(
 
 fn get_expression(tokens: &[Token]) -> Result<RecExpr<()>, Error> {
     // First we get the generic expressions
-    match get_generic_expression(tokens)
-    {
+    match get_generic_expression(tokens) {
         // And then convert the generic expression to a recursive expression
-        Ok(gen_expr) => match generic_expression_to_recursive_expression(gen_expr)
-        {
+        Ok(gen_expr) => match generic_expression_to_recursive_expression(gen_expr) {
             Ok(rec_expr) => Ok(rec_expr),
             Err(e) => return Err(e),
         },
@@ -369,30 +356,25 @@ fn get_expression(tokens: &[Token]) -> Result<RecExpr<()>, Error> {
 }
 
 fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecExpr<()>, Error> {
-    let data = match gen_expr.data
-    {
+    let data = match gen_expr.data {
         GenExprData::Variable { name } => RecExprData::<()>::Variable { name },
         GenExprData::Number { number } => RecExprData::<()>::Number { number },
         GenExprData::String { value } => RecExprData::<()>::String { value },
         GenExprData::Boolean { value } => RecExprData::<()>::Boolean { value },
-        GenExprData::UnaryOp { operator, operand } => match operator
-        {
-            SymbolType::Minus => match generic_expression_to_recursive_expression(*operand)
-            {
+        GenExprData::UnaryOp { operator, operand } => match operator {
+            SymbolType::Minus => match generic_expression_to_recursive_expression(*operand) {
                 Ok(operand_expr) => RecExprData::<()>::Minus {
                     right: Box::new(operand_expr),
                 },
                 Err(e) => return Err(e),
             },
-            SymbolType::Not => match generic_expression_to_recursive_expression(*operand)
-            {
+            SymbolType::Not => match generic_expression_to_recursive_expression(*operand) {
                 Ok(operand_expr) => RecExprData::<()>::Not {
                     right: Box::new(operand_expr),
                 },
                 Err(e) => return Err(e),
             },
-            _ =>
-            {
+            _ => {
                 return Err(Error::LocationError {
                     message: format!(
                         "Invalid unary operator: {}",
@@ -408,15 +390,12 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
             left_operand,
             operator,
             right_operand,
-        } => match operator
-        {
-            SymbolType::Plus =>
-            {
+        } => match operator {
+            SymbolType::Plus => {
                 match (
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
-                )
-                {
+                ) {
                     (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::Add {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
@@ -425,13 +404,11 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     (_, Err(e)) => return Err(e),
                 }
             }
-            SymbolType::Minus =>
-            {
+            SymbolType::Minus => {
                 match (
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
-                )
-                {
+                ) {
                     (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::Subtract {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
@@ -440,13 +417,11 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     (_, Err(e)) => return Err(e),
                 }
             }
-            SymbolType::Star =>
-            {
+            SymbolType::Star => {
                 match (
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
-                )
-                {
+                ) {
                     (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::Multiply {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
@@ -455,13 +430,11 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     (_, Err(e)) => return Err(e),
                 }
             }
-            SymbolType::Slash =>
-            {
+            SymbolType::Slash => {
                 match (
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
-                )
-                {
+                ) {
                     (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::Divide {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
@@ -470,13 +443,11 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     (_, Err(e)) => return Err(e),
                 }
             }
-            SymbolType::Hat =>
-            {
+            SymbolType::Hat => {
                 match (
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
-                )
-                {
+                ) {
                     (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::Power {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
@@ -485,13 +456,11 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     (_, Err(e)) => return Err(e),
                 }
             }
-            SymbolType::Or =>
-            {
+            SymbolType::Or => {
                 match (
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
-                )
-                {
+                ) {
                     (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::Or {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
@@ -500,13 +469,11 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     (_, Err(e)) => return Err(e),
                 }
             }
-            SymbolType::And =>
-            {
+            SymbolType::And => {
                 match (
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
-                )
-                {
+                ) {
                     (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::And {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
@@ -515,13 +482,11 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     (_, Err(e)) => return Err(e),
                 }
             }
-            SymbolType::EqualsEquals =>
-            {
+            SymbolType::EqualsEquals => {
                 match (
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
-                )
-                {
+                ) {
                     (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::Equals {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
@@ -530,13 +495,11 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     (_, Err(e)) => return Err(e),
                 }
             }
-            SymbolType::NotEquals =>
-            {
+            SymbolType::NotEquals => {
                 match (
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
-                )
-                {
+                ) {
                     (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::NotEquals {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
@@ -545,13 +508,11 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     (_, Err(e)) => return Err(e),
                 }
             }
-            SymbolType::GreaterThan =>
-            {
+            SymbolType::GreaterThan => {
                 match (
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
-                )
-                {
+                ) {
                     (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::GreaterThan {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
@@ -560,13 +521,11 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     (_, Err(e)) => return Err(e),
                 }
             }
-            SymbolType::GreaterThanOrEqual =>
-            {
+            SymbolType::GreaterThanOrEqual => {
                 match (
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
-                )
-                {
+                ) {
                     (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::GreaterThanOrEqual {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
@@ -575,13 +534,11 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     (_, Err(e)) => return Err(e),
                 }
             }
-            SymbolType::LessThan =>
-            {
+            SymbolType::LessThan => {
                 match (
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
-                )
-                {
+                ) {
                     (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::LessThan {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
@@ -590,13 +547,11 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     (_, Err(e)) => return Err(e),
                 }
             }
-            SymbolType::LessThanOrEqual =>
-            {
+            SymbolType::LessThanOrEqual => {
                 match (
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
-                )
-                {
+                ) {
                     (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::LessThanOrEqual {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
@@ -606,8 +561,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                 }
             }
 
-            _ =>
-            {
+            _ => {
                 return Err(Error::LocationError {
                     message: format!(
                         "Invalid binary operator: {}",
@@ -622,13 +576,10 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
         GenExprData::FunctionCall {
             function_name,
             arguments,
-        } =>
-        {
+        } => {
             let mut rec_expr_arguments = Vec::new();
-            for gen_argument in arguments
-            {
-                match generic_expression_to_recursive_expression(gen_argument)
-                {
+            for gen_argument in arguments {
+                match generic_expression_to_recursive_expression(gen_argument) {
                     Ok(rec_expr_argument) => rec_expr_arguments.push(rec_expr_argument),
                     Err(e) => return Err(e),
                 }
@@ -639,13 +590,10 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                 args: rec_expr_arguments,
             }
         }
-        GenExprData::List { elements } =>
-        {
+        GenExprData::List { elements } => {
             let mut rec_expr_elements = Vec::new();
-            for gen_element in elements
-            {
-                match generic_expression_to_recursive_expression(gen_element)
-                {
+            for gen_element in elements {
+                match generic_expression_to_recursive_expression(gen_element) {
                     Ok(rec_expr_element) => rec_expr_elements.push(rec_expr_element),
                     Err(e) => return Err(e),
                 }
@@ -655,10 +603,8 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                 elements: rec_expr_elements,
             }
         }
-        GenExprData::ListAccess { variable, index } =>
-        {
-            match generic_expression_to_recursive_expression(*index)
-            {
+        GenExprData::ListAccess { variable, index } => {
+            match generic_expression_to_recursive_expression(*index) {
                 Ok(rec_expr_index) => RecExprData::<()>::ListAccess {
                     variable,
                     index: Box::new(rec_expr_index),
@@ -695,15 +641,12 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
     let precedence_seven = Vec::from([SymbolType::Hat]);
 
     // Looking for the first lowest precedence operators
-    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_one)
-    {
+    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_one) {
         let left = get_generic_expression(&tokens[0..index]);
         let right = get_generic_expression(&tokens[index + 1..]);
 
-        match (left, right)
-        {
-            (Ok(left_expr), Ok(right_expr)) =>
-            {
+        match (left, right) {
+            (Ok(left_expr), Ok(right_expr)) => {
                 let row = left_expr.row;
                 let col_start = left_expr.col_start;
                 let col_end = right_expr.col_end;
@@ -724,15 +667,12 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
     }
 
     // Looking for the second lowest precedence operators
-    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_two)
-    {
+    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_two) {
         let left = get_generic_expression(&tokens[0..index]);
         let right = get_generic_expression(&tokens[index + 1..]);
 
-        match (left, right)
-        {
-            (Ok(left_expr), Ok(right_expr)) =>
-            {
+        match (left, right) {
+            (Ok(left_expr), Ok(right_expr)) => {
                 let row = left_expr.row;
                 let col_start = left_expr.col_start;
                 let col_end = right_expr.col_end;
@@ -753,15 +693,12 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
     }
 
     // Looking for the third lowest precedence operators
-    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_three)
-    {
+    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_three) {
         let left = get_generic_expression(&tokens[0..index]);
         let right = get_generic_expression(&tokens[index + 1..]);
 
-        match (left, right)
-        {
-            (Ok(left_expr), Ok(right_expr)) =>
-            {
+        match (left, right) {
+            (Ok(left_expr), Ok(right_expr)) => {
                 let row = left_expr.row;
                 let col_start = left_expr.col_start;
                 let col_end = right_expr.col_end;
@@ -781,8 +718,7 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
         }
     }
 
-    match tokens
-    {
+    match tokens {
         [Token {
             data: TokenData::Symbol {
                 symbol_type: SymbolType::Not,
@@ -790,13 +726,10 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
             row: row_not,
             col_start: col_start_not,
             ..
-        }, rest @ ..] =>
-        {
+        }, rest @ ..] => {
             // not statement detected
-            match get_generic_expression(&rest)
-            {
-                Ok(expr) =>
-                {
+            match get_generic_expression(&rest) {
+                Ok(expr) => {
                     let expr_col_end = expr.col_end;
                     return Ok(GenExpr {
                         data: GenExprData::UnaryOp {
@@ -811,20 +744,16 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
                 Err(e) => return Err(e),
             }
         }
-        _ =>
-        {}
+        _ => {}
     }
 
     // Looking for the fourth lowest precedence operators
-    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_four)
-    {
+    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_four) {
         let left = get_generic_expression(&tokens[0..index]);
         let right = get_generic_expression(&tokens[index + 1..]);
 
-        match (left, right)
-        {
-            (Ok(left_expr), Ok(right_expr)) =>
-            {
+        match (left, right) {
+            (Ok(left_expr), Ok(right_expr)) => {
                 let row = left_expr.row;
                 let col_start = left_expr.col_start;
                 let col_end = right_expr.col_end;
@@ -845,15 +774,12 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
     }
 
     // Looking for the fifth lowest precedence operators
-    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_five)
-    {
+    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_five) {
         let left = get_generic_expression(&tokens[0..index]);
         let right = get_generic_expression(&tokens[index + 1..]);
 
-        match (left, right)
-        {
-            (Ok(left_expr), Ok(right_expr)) =>
-            {
+        match (left, right) {
+            (Ok(left_expr), Ok(right_expr)) => {
                 let row = left_expr.row;
                 let col_start = left_expr.col_start;
                 let col_end = right_expr.col_end;
@@ -874,15 +800,12 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
     }
 
     // Looking for the sixth lowest precedence operators
-    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_six)
-    {
+    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_six) {
         let left = get_generic_expression(&tokens[0..index]);
         let right = get_generic_expression(&tokens[index + 1..]);
 
-        match (left, right)
-        {
-            (Ok(left_expr), Ok(right_expr)) =>
-            {
+        match (left, right) {
+            (Ok(left_expr), Ok(right_expr)) => {
                 let row = left_expr.row;
                 let col_start = left_expr.col_start;
                 let col_end = right_expr.col_end;
@@ -902,8 +825,7 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
         }
     }
 
-    match tokens
-    {
+    match tokens {
         // negative unary operator
         [Token {
             data: TokenData::Symbol {
@@ -912,13 +834,10 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
             row: row_not,
             col_start: col_start_not,
             ..
-        }, rest @ ..] =>
-        {
+        }, rest @ ..] => {
             // unary - statement detected
-            match get_generic_expression(&rest)
-            {
-                Ok(expr) =>
-                {
+            match get_generic_expression(&rest) {
+                Ok(expr) => {
                     let expr_col_end = expr.col_end;
                     return Ok(GenExpr {
                         data: GenExprData::UnaryOp {
@@ -933,20 +852,16 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
                 Err(e) => return Err(e),
             }
         }
-        _ =>
-        {}
+        _ => {}
     }
 
     // Looking for the seventh lowest precedence operators
-    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_seven)
-    {
+    if let Ok((symbol_type, index)) = get_last_occurence(tokens, precedence_seven) {
         let left = get_generic_expression(&tokens[0..index]);
         let right = get_generic_expression(&tokens[index + 1..]);
 
-        match (left, right)
-        {
-            (Ok(left_expr), Ok(right_expr)) =>
-            {
+        match (left, right) {
+            (Ok(left_expr), Ok(right_expr)) => {
                 let row = left_expr.row;
                 let col_start = left_expr.col_start;
                 let col_end = right_expr.col_end;
@@ -1245,11 +1160,9 @@ fn get_generic_expression(tokens: &[Token]) -> Result<GenExpr, Error> {
 fn read_function_parameters(line: &[Token]) -> Result<Vec<GenExpr>, Error> {
     let mut parameters: Vec<GenExpr> = Vec::new();
 
-    match read_function_parameters_rec(line, &mut parameters)
-    {
+    match read_function_parameters_rec(line, &mut parameters) {
         Ok(_) => return Ok(parameters),
-        Err(_) =>
-        {
+        Err(_) => {
             return Err(Error::LocationError {
                 message: format!("Could not find a valid function call"),
                 row: line[0].row,
@@ -1266,11 +1179,9 @@ fn read_function_parameters_rec(
 ) -> Result<String, Error> {
     // Attempt to read a function parameter by trying to find a valid expression looking at each comma
 
-    match read_function_parameter(line)
-    {
+    match read_function_parameter(line) {
         Ok((None, _)) => return Ok(String::from("Success")),
-        Ok((Some(parameter), rest)) =>
-        {
+        Ok((Some(parameter), rest)) => {
             parameters.push(parameter);
 
             return read_function_parameters_rec(rest, parameters);
@@ -1281,8 +1192,7 @@ fn read_function_parameters_rec(
 
 fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token]), Error> {
     // Attempt to read a function parameter by trying to find a valid expression looking at each comma
-    match line
-    {
+    match line {
         // Found the end of the function parameters, stopping now
         [Token {
             data:
@@ -1291,41 +1201,32 @@ fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token])
                 },
             ..
         }, rest @ ..] => return Ok((None, rest)),
-        _ =>
-        {
-            if line.len() <= 1
-            {
+        _ => {
+            if line.len() <= 1 {
                 return Err(Error::SimpleError {
                     message: format!("Could not find a valid function call"),
                 });
             }
 
             let mut parenthesis_depth = 1;
-            match line[0].data
-            {
+            match line[0].data {
                 TokenData::Symbol {
                     symbol_type: SymbolType::ParenthesisOpen,
                 } => parenthesis_depth += 1,
                 TokenData::Symbol {
                     symbol_type: SymbolType::SquareBracketOpen,
                 } => parenthesis_depth += 1,
-                _ =>
-                {}
+                _ => {}
             }
-            for i in 1..line.len()
-            {
-                match line[i].data
-                {
+            for i in 1..line.len() {
+                match line[i].data {
                     TokenData::Symbol {
                         symbol_type: SymbolType::Comma,
-                    } =>
-                    {
+                    } => {
                         // Check if we're in main body of the function call
-                        if parenthesis_depth == 1
-                        {
+                        if parenthesis_depth == 1 {
                             // Attempt to get an expression from all tokens up until this comma
-                            match get_generic_expression(&line[0..i])
-                            {
+                            match get_generic_expression(&line[0..i]) {
                                 Ok(expr) => return Ok((Some(expr), &line[i + 1..])),
                                 Err(_) => continue,
                             }
@@ -1342,20 +1243,16 @@ fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token])
                     } => parenthesis_depth -= 1,
                     TokenData::Symbol {
                         symbol_type: SymbolType::ParenthesisClosed,
-                    } =>
-                    {
+                    } => {
                         parenthesis_depth -= 1;
-                        if parenthesis_depth == 0
-                        {
-                            match get_generic_expression(&line[0..i])
-                            {
+                        if parenthesis_depth == 0 {
+                            match get_generic_expression(&line[0..i]) {
                                 Ok(expr) => return Ok((Some(expr), &line[i..])),
                                 Err(e) => return Err(e),
                             }
                         }
                     }
-                    _ =>
-                    {}
+                    _ => {}
                 }
             }
 
@@ -1370,11 +1267,9 @@ fn read_function_parameter(line: &[Token]) -> Result<(Option<GenExpr>, &[Token])
 fn read_list_items(line: &[Token]) -> Result<Vec<GenExpr>, Error> {
     let mut items: Vec<GenExpr> = Vec::new();
 
-    match read_list_items_rec(line, &mut items)
-    {
+    match read_list_items_rec(line, &mut items) {
         Ok(_) => return Ok(items),
-        Err(e) =>
-        {
+        Err(e) => {
             return Err(Error::LocationError {
                 message: format!("Could not find a valid list"),
                 row: line[0].row,
@@ -1386,11 +1281,9 @@ fn read_list_items(line: &[Token]) -> Result<Vec<GenExpr>, Error> {
 }
 
 fn read_list_items_rec(line: &[Token], items: &mut Vec<GenExpr>) -> Result<String, Error> {
-    match read_list_item(line)
-    {
+    match read_list_item(line) {
         Ok((None, _)) => return Ok(String::from("Succcess")),
-        Ok((Some(item), rest)) =>
-        {
+        Ok((Some(item), rest)) => {
             items.push(item);
 
             return read_list_items_rec(rest, items);
@@ -1401,8 +1294,7 @@ fn read_list_items_rec(line: &[Token], items: &mut Vec<GenExpr>) -> Result<Strin
 
 fn read_list_item(line: &[Token]) -> Result<(Option<GenExpr>, &[Token]), Error> {
     // Attempt to read a list item by trying to find a valid expression looking at each comma
-    match line
-    {
+    match line {
         // Found the end of the list items, stopping now
         [Token {
             data:
@@ -1411,41 +1303,32 @@ fn read_list_item(line: &[Token]) -> Result<(Option<GenExpr>, &[Token]), Error> 
                 },
             ..
         }, rest @ ..] => return Ok((None, rest)),
-        _ =>
-        {
-            if line.len() <= 1
-            {
+        _ => {
+            if line.len() <= 1 {
                 return Err(Error::SimpleError {
                     message: format!("Could not find a valid list"),
                 });
             }
 
             let mut parenthesis_depth = 1;
-            match line[0].data
-            {
+            match line[0].data {
                 TokenData::Symbol {
                     symbol_type: SymbolType::ParenthesisOpen,
                 } => parenthesis_depth += 1,
                 TokenData::Symbol {
                     symbol_type: SymbolType::SquareBracketOpen,
                 } => parenthesis_depth += 1,
-                _ =>
-                {}
+                _ => {}
             }
-            for i in 1..line.len()
-            {
-                match line[i].data
-                {
+            for i in 1..line.len() {
+                match line[i].data {
                     TokenData::Symbol {
                         symbol_type: SymbolType::Comma,
-                    } =>
-                    {
+                    } => {
                         // Check if we're in main body of the function call
-                        if parenthesis_depth == 1
-                        {
+                        if parenthesis_depth == 1 {
                             // Attempt to get an expression from all tokens up until this comma
-                            match get_generic_expression(&line[0..i])
-                            {
+                            match get_generic_expression(&line[0..i]) {
                                 Ok(expr) => return Ok((Some(expr), &line[i + 1..])),
                                 Err(_) => continue,
                             }
@@ -1462,20 +1345,16 @@ fn read_list_item(line: &[Token]) -> Result<(Option<GenExpr>, &[Token]), Error> 
                     } => parenthesis_depth -= 1,
                     TokenData::Symbol {
                         symbol_type: SymbolType::SquareBracketClosed,
-                    } =>
-                    {
+                    } => {
                         parenthesis_depth -= 1;
-                        if parenthesis_depth == 0
-                        {
-                            match get_generic_expression(&line[0..i])
-                            {
+                        if parenthesis_depth == 0 {
+                            match get_generic_expression(&line[0..i]) {
                                 Ok(expr) => return Ok((Some(expr), &line[i..])),
                                 Err(e) => return Err(e),
                             }
                         }
                     }
-                    _ =>
-                    {}
+                    _ => {}
                 }
             }
 
@@ -1491,23 +1370,18 @@ fn add_to_if_statement(
     if_statement: &mut BaseExpr<()>,
     else_statement_to_add: BaseExpr<()>,
 ) -> Result<String, Error> {
-    match &mut if_statement.data
-    {
+    match &mut if_statement.data {
         BaseExprData::IfStatement { else_statement, .. }
-        | BaseExprData::ElseIfStatement { else_statement, .. } => match else_statement
-        {
-            Some(embedded_if_statement) =>
-            {
+        | BaseExprData::ElseIfStatement { else_statement, .. } => match else_statement {
+            Some(embedded_if_statement) => {
                 return add_to_if_statement(embedded_if_statement, else_statement_to_add);
             }
-            None =>
-            {
+            None => {
                 *else_statement = Some(Box::new(else_statement_to_add));
                 return Ok(String::from("OK"));
             }
         },
-        _ =>
-        {
+        _ => {
             return Err(Error::LocationError {
                 message: format!("Could not find if statement to add else statement to"),
                 row: else_statement_to_add.row,
@@ -1523,19 +1397,15 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr<()>>) -> Result<Vec<BaseEx
 
     // This can probably be done without copying every single item...
 
-    for base_expression in base_expressions
-    {
-        match base_expression.data
-        {
+    for base_expression in base_expressions {
+        match base_expression.data {
             BaseExprData::IfStatement {
                 condition,
                 body,
                 else_statement,
-            } =>
-            {
+            } => {
                 // Recursively merge if statements in the body
-                let merged_body = match merge_if_statements(body)
-                {
+                let merged_body = match merge_if_statements(body) {
                     Ok(body) => body,
                     Err(e) => return Err(e),
                 };
@@ -1554,24 +1424,20 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr<()>>) -> Result<Vec<BaseEx
             }
             BaseExprData::ElseIfStatement {
                 condition, body, ..
-            } =>
-            {
+            } => {
                 // Recursively merge if statements in the body
-                let merged_body = match merge_if_statements(body)
-                {
+                let merged_body = match merge_if_statements(body) {
                     Ok(body) => body,
                     Err(e) => return Err(e),
                 };
 
-                match merged_statements.last_mut()
-                {
+                match merged_statements.last_mut() {
                     Some(
                         upper_if_statement @ BaseExpr {
                             data: BaseExprData::IfStatement { .. },
                             ..
                         },
-                    ) =>
-                    {
+                    ) => {
                         match add_to_if_statement(
                             upper_if_statement,
                             BaseExpr {
@@ -1585,15 +1451,12 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr<()>>) -> Result<Vec<BaseEx
                                 col_end: base_expression.col_end,
                                 generic_data: base_expression.generic_data,
                             },
-                        )
-                        {
-                            Ok(_) =>
-                            {}
+                        ) {
+                            Ok(_) => {}
                             Err(e) => return Err(e),
                         }
                     }
-                    _ =>
-                    {
+                    _ => {
                         return Err(Error::LocationError {
                             message: format!(
                                 "Could not find if statement to add else-if statement to"
@@ -1605,24 +1468,20 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr<()>>) -> Result<Vec<BaseEx
                     }
                 }
             }
-            BaseExprData::ElseStatement { body } =>
-            {
+            BaseExprData::ElseStatement { body } => {
                 // Recursively merge if statements in the body
-                let merged_body = match merge_if_statements(body)
-                {
+                let merged_body = match merge_if_statements(body) {
                     Ok(body) => body,
                     Err(e) => return Err(e),
                 };
 
-                match &mut merged_statements.last_mut()
-                {
+                match &mut merged_statements.last_mut() {
                     Some(
                         upper_if_statement @ BaseExpr {
                             data: BaseExprData::IfStatement { .. },
                             ..
                         },
-                    ) =>
-                    {
+                    ) => {
                         match add_to_if_statement(
                             upper_if_statement,
                             BaseExpr {
@@ -1632,15 +1491,12 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr<()>>) -> Result<Vec<BaseEx
                                 col_end: base_expression.col_end,
                                 generic_data: base_expression.generic_data,
                             },
-                        )
-                        {
-                            Ok(_) =>
-                            {}
+                        ) {
+                            Ok(_) => {}
                             Err(e) => return Err(e),
                         }
                     }
-                    _ =>
-                    {
+                    _ => {
                         return Err(Error::LocationError {
                             message: format!(
                                 "Could not find if statement to add else statement to"
@@ -1656,11 +1512,9 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr<()>>) -> Result<Vec<BaseEx
                 var_name,
                 until,
                 body,
-            } =>
-            {
+            } => {
                 // Recursively merge if statements in the body
-                let merged_body = match merge_if_statements(body)
-                {
+                let merged_body = match merge_if_statements(body) {
                     Ok(body) => body,
                     Err(e) => return Err(e),
                 };
@@ -1681,11 +1535,9 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr<()>>) -> Result<Vec<BaseEx
                 fun_name,
                 args,
                 body,
-            } =>
-            {
+            } => {
                 // Recursively merge if statements in the body
-                let merged_body = match merge_if_statements(body)
-                {
+                let merged_body = match merge_if_statements(body) {
                     Ok(body) => body,
                     Err(e) => return Err(e),
                 };
@@ -1702,8 +1554,7 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr<()>>) -> Result<Vec<BaseEx
                     generic_data: base_expression.generic_data,
                 });
             }
-            other =>
-            {
+            other => {
                 merged_statements.push(BaseExpr {
                     data: other,
                     ..base_expression
@@ -1727,16 +1578,13 @@ fn get_base_expressions_with_indentation(
 ) -> Result<Vec<BaseExpr<()>>, Error> {
     let mut expressions = Vec::new();
 
-    while let Some(token_line) = token_lines_iter.peek()
-    {
+    while let Some(token_line) = token_lines_iter.peek() {
         // Stop when we find a line with lower indentation
-        if token_line.indentation < indentation
-        {
+        if token_line.indentation < indentation {
             return Ok(expressions);
         }
 
-        match get_base_expression(token_lines_iter)
-        {
+        match get_base_expression(token_lines_iter) {
             Ok(base_expr) => expressions.push(base_expr),
             Err(e) => return Err(e),
         }
@@ -1748,29 +1596,24 @@ fn get_base_expressions_with_indentation(
 fn get_base_expression(
     token_lines_iter: &mut std::iter::Peekable<std::slice::Iter<'_, TokenLine>>,
 ) -> Result<BaseExpr<()>, Error> {
-    let Some(token_line) = token_lines_iter.next()
-    else
-    {
+    let Some(token_line) = token_lines_iter.next() else {
         return Err(Error::SimpleError {
             message: format!("No more lines found"),
         });
     };
 
     let tokens = &token_line.tokens;
-    let (row, col_start, col_end) = match &tokens[..]
-    {
+    let (row, col_start, col_end) = match &tokens[..] {
         [first, .., last] => (first.row, first.col_start, last.col_end),
         [only_one] => (only_one.row, only_one.col_start, only_one.col_end),
-        _ =>
-        {
+        _ => {
             return Err(Error::SimpleError {
                 message: format!("No tokens found"),
             });
         }
     };
 
-    let data: BaseExprData<()> = match &tokens[..]
-    {
+    let data: BaseExprData<()> = match &tokens[..] {
         [Token {
             data: TokenData::Variable { name },
             ..
@@ -1779,10 +1622,8 @@ fn get_base_expression(
                 symbol_type: SymbolType::Equals,
             },
             ..
-        }, rest @ ..] =>
-        {
-            let expression = match get_expression(rest)
-            {
+        }, rest @ ..] => {
+            let expression = match get_expression(rest) {
                 Ok(expression) => expression,
                 Err(error_message) => return Err(error_message),
             };
@@ -1800,10 +1641,8 @@ fn get_base_expression(
                     symbol_type: SymbolType::PlusEquals,
                 },
             ..
-        }, rest @ ..] =>
-        {
-            let expression = match get_expression(rest)
-            {
+        }, rest @ ..] => {
+            let expression = match get_expression(rest) {
                 Ok(expression) => expression,
                 Err(error_message) => return Err(error_message),
             };
@@ -1817,10 +1656,8 @@ fn get_base_expression(
                 symbol_type: SymbolType::If,
             },
             ..
-        }, rest @ ..] =>
-        {
-            let condition = match get_expression(rest)
-            {
+        }, rest @ ..] => {
+            let condition = match get_expression(rest) {
                 Ok(expression) => expression,
                 Err(error_message) => return Err(error_message),
             };
@@ -1828,8 +1665,7 @@ fn get_base_expression(
             let body = match get_base_expressions_with_indentation(
                 token_lines_iter,
                 token_line.indentation + 1,
-            )
-            {
+            ) {
                 Ok(body) => body,
                 Err(e) => return Err(e),
             };
@@ -1850,10 +1686,8 @@ fn get_base_expression(
                 symbol_type: SymbolType::If,
             },
             ..
-        }, rest @ ..] =>
-        {
-            let condition = match get_expression(rest)
-            {
+        }, rest @ ..] => {
+            let condition = match get_expression(rest) {
                 Ok(expression) => expression,
                 Err(error_message) => return Err(error_message),
             };
@@ -1861,8 +1695,7 @@ fn get_base_expression(
             let body = match get_base_expressions_with_indentation(
                 token_lines_iter,
                 token_line.indentation + 1,
-            )
-            {
+            ) {
                 Ok(body) => body,
                 Err(e) => return Err(e),
             };
@@ -1878,12 +1711,9 @@ fn get_base_expression(
                 symbol_type: SymbolType::Else,
             },
             ..
-        }, rest @ ..] =>
-        {
-            match rest
-            {
-                [first, .., last] =>
-                {
+        }, rest @ ..] => {
+            match rest {
+                [first, .., last] => {
                     return Err(Error::LocationError {
                         message: format!("Unexpected extra tokens on else statement"),
                         row: first.row,
@@ -1891,8 +1721,7 @@ fn get_base_expression(
                         col_end: last.col_end,
                     });
                 }
-                [only_one] =>
-                {
+                [only_one] => {
                     return Err(Error::LocationError {
                         message: format!("Unexpected extra tokens on else statement"),
                         row: only_one.row,
@@ -1900,15 +1729,13 @@ fn get_base_expression(
                         col_end: only_one.col_end,
                     });
                 }
-                _ =>
-                {}
+                _ => {}
             }
 
             let body = match get_base_expressions_with_indentation(
                 token_lines_iter,
                 token_line.indentation + 1,
-            )
-            {
+            ) {
                 Ok(body) => body,
                 Err(e) => return Err(e),
             };
@@ -1920,12 +1747,9 @@ fn get_base_expression(
                 symbol_type: SymbolType::Break,
             },
             ..
-        }, rest @ ..] =>
-        {
-            match rest
-            {
-                [first, .., last] =>
-                {
+        }, rest @ ..] => {
+            match rest {
+                [first, .., last] => {
                     return Err(Error::LocationError {
                         message: format!("Unexpected extra tokens on else statement"),
                         row: first.row,
@@ -1933,8 +1757,7 @@ fn get_base_expression(
                         col_end: last.col_end,
                     });
                 }
-                [only_one] =>
-                {
+                [only_one] => {
                     return Err(Error::LocationError {
                         message: format!("Unexpected extra tokens on else statement"),
                         row: only_one.row,
@@ -1942,8 +1765,7 @@ fn get_base_expression(
                         col_end: only_one.col_end,
                     });
                 }
-                _ =>
-                {}
+                _ => {}
             }
 
             BaseExprData::Break
@@ -1963,10 +1785,8 @@ fn get_base_expression(
                 symbol_type: SymbolType::In,
             },
             ..
-        }, rest @ ..] =>
-        {
-            let range = match get_expression(rest)
-            {
+        }, rest @ ..] => {
+            let range = match get_expression(rest) {
                 Ok(expression) => expression,
                 Err(error_message) => return Err(error_message),
             };
@@ -1974,8 +1794,7 @@ fn get_base_expression(
             let body = match get_base_expressions_with_indentation(
                 token_lines_iter,
                 token_line.indentation + 1,
-            )
-            {
+            ) {
                 Ok(body) => body,
                 Err(e) => return Err(e),
             };
@@ -2005,15 +1824,11 @@ fn get_base_expression(
                 },
             col_end,
             ..
-        }, rest @ ..] =>
-        {
-            let parameters = match parse_function_parameters(rest)
-            {
+        }, rest @ ..] => {
+            let parameters = match parse_function_parameters(rest) {
                 Ok(parameters) => parameters,
-                Err(_) => match rest
-                {
-                    [.., last] =>
-                    {
+                Err(_) => match rest {
+                    [.., last] => {
                         return Err(Error::LocationError {
                             message: format!("Invalid function parameters"),
                             row: *row,
@@ -2021,8 +1836,7 @@ fn get_base_expression(
                             col_end: last.col_end,
                         })
                     }
-                    _ =>
-                    {
+                    _ => {
                         return Err(Error::LocationError {
                             message: format!("Invalid function parameters"),
                             row: *row,
@@ -2036,8 +1850,7 @@ fn get_base_expression(
             let body = match get_base_expressions_with_indentation(
                 token_lines_iter,
                 token_line.indentation + 1,
-            )
-            {
+            ) {
                 Ok(body) => body,
                 Err(e) => return Err(e),
             };
@@ -2053,16 +1866,11 @@ fn get_base_expression(
                 symbol_type: SymbolType::Return,
             },
             ..
-        }, rest @ ..] =>
-        {
-            if rest.len() == 0
-            {
+        }, rest @ ..] => {
+            if rest.len() == 0 {
                 BaseExprData::Return { return_value: None }
-            }
-            else
-            {
-                let expression = match get_expression(rest)
-                {
+            } else {
+                let expression = match get_expression(rest) {
                     Ok(expression) => expression,
                     Err(error_message) => return Err(error_message),
                 };
@@ -2071,10 +1879,8 @@ fn get_base_expression(
                 }
             }
         }
-        rest @ _ =>
-        {
-            let expression = match get_expression(rest)
-            {
+        rest @ _ => {
+            let expression = match get_expression(rest) {
                 Ok(expression) => expression,
                 Err(error_message) => return Err(error_message),
             };
@@ -2092,8 +1898,7 @@ fn get_base_expression(
 }
 
 fn parse_function_parameters(tokens: &[Token]) -> Result<Vec<String>, Error> {
-    match tokens
-    {
+    match tokens {
         [Token {
             data: TokenData::Variable {
                 name: parameter_name,
@@ -2104,10 +1909,8 @@ fn parse_function_parameters(tokens: &[Token]) -> Result<Vec<String>, Error> {
                 symbol_type: SymbolType::Comma,
             },
             ..
-        }, rest @ ..] => match parse_function_parameters(rest)
-        {
-            Ok(mut other_parameters) =>
-            {
+        }, rest @ ..] => match parse_function_parameters(rest) {
+            Ok(mut other_parameters) => {
                 other_parameters.insert(0, parameter_name.clone());
                 return Ok(other_parameters);
             }
@@ -2125,8 +1928,7 @@ fn parse_function_parameters(tokens: &[Token]) -> Result<Vec<String>, Error> {
                     symbol_type: SymbolType::ParenthesisClosed,
                 },
             ..
-        }] =>
-        {
+        }] => {
             return Ok(vec![parameter_name.clone()]);
         }
 
@@ -2137,12 +1939,9 @@ fn parse_function_parameters(tokens: &[Token]) -> Result<Vec<String>, Error> {
                     symbol_type: SymbolType::ParenthesisClosed,
                 },
             ..
-        }, rest @ ..] =>
-        {
-            match rest
-            {
-                [first, .., last] =>
-                {
+        }, rest @ ..] => {
+            match rest {
+                [first, .., last] => {
                     return Err(Error::LocationError {
                         message: format!("Unexpected extra tokens on else statement"),
                         row: first.row,
@@ -2150,8 +1949,7 @@ fn parse_function_parameters(tokens: &[Token]) -> Result<Vec<String>, Error> {
                         col_end: last.col_end,
                     });
                 }
-                [only_one] =>
-                {
+                [only_one] => {
                     return Err(Error::LocationError {
                         message: format!("Unexpected extra tokens on else statement"),
                         row: only_one.row,
@@ -2159,14 +1957,12 @@ fn parse_function_parameters(tokens: &[Token]) -> Result<Vec<String>, Error> {
                         col_end: only_one.col_end,
                     });
                 }
-                _ =>
-                {}
+                _ => {}
             }
 
             return Ok(Vec::new());
         }
-        _ =>
-        {
+        _ => {
             return Err(Error::SimpleError {
                 message: format!("Invalid function parameter definition"),
             })
@@ -2186,66 +1982,55 @@ fn find_next_bracket(tokens: &[Token]) -> i32 {
 */
 
 pub fn print_expressions(expressions: &Vec<BaseExpr<()>>) {
-    for expression in expressions
-    {
+    for expression in expressions {
         print_expression(expression, 0);
         print!("\n");
     }
 }
 
 fn print_indentation(indentation: i32) {
-    for _ in 0..indentation
-    {
+    for _ in 0..indentation {
         print!("  ")
     }
 }
 
 fn print_expression(expression: &BaseExpr<()>, indentation: i32) {
     print_indentation(indentation);
-    match &expression.data
-    {
+    match &expression.data {
         BaseExprData::Simple { expr } => print_recursive_expression(expr),
-        BaseExprData::VariableAssignment { var_name, expr } =>
-        {
+        BaseExprData::VariableAssignment { var_name, expr } => {
             print!("VarAssign({var_name:?}, ");
             print_recursive_expression(expr);
             print!(")");
         }
-        BaseExprData::PlusEqualsStatement { var_name, expr } =>
-        {
+        BaseExprData::PlusEqualsStatement { var_name, expr } => {
             print!("PlusEquals({var_name:?}, ");
             print_recursive_expression(expr);
             print!(")");
         }
         BaseExprData::IfStatement {
             condition, body, ..
-        } =>
-        {
+        } => {
             print!("IfSt(");
             print_recursive_expression(condition);
             print!(")\n");
-            for expr in body
-            {
+            for expr in body {
                 print_expression(expr, indentation + 1);
             }
         }
         BaseExprData::ElseIfStatement {
             condition, body, ..
-        } =>
-        {
+        } => {
             print!("ElseIfSt(");
             print_recursive_expression(condition);
             print!(")");
-            for expr in body
-            {
+            for expr in body {
                 print_expression(expr, indentation + 1);
             }
         }
-        BaseExprData::ElseStatement { body } =>
-        {
+        BaseExprData::ElseStatement { body } => {
             print!("ElseSt(");
-            for expr in body
-            {
+            for expr in body {
                 print_expression(expr, indentation + 1);
             }
             print!(")");
@@ -2254,13 +2039,11 @@ fn print_expression(expression: &BaseExpr<()>, indentation: i32) {
             var_name,
             until,
             body,
-        } =>
-        {
+        } => {
             print!("For({var_name:?} in ");
             print_recursive_expression(until);
             print!("\n");
-            for expr in body
-            {
+            for expr in body {
                 print_expression(expr, indentation + 1);
             }
             print!(")");
@@ -2269,28 +2052,22 @@ fn print_expression(expression: &BaseExpr<()>, indentation: i32) {
             fun_name,
             args,
             body,
-        } =>
-        {
+        } => {
             print!("fun {fun_name}(");
-            for (i, arg) in args.iter().enumerate()
-            {
+            for (i, arg) in args.iter().enumerate() {
                 print!("{arg}");
-                if i != args.len() - 1
-                {
+                if i != args.len() - 1 {
                     print!(", ");
                 }
             }
             print!(")\n");
-            for expr in body
-            {
+            for expr in body {
                 print_expression(expr, indentation + 1);
             }
         }
-        BaseExprData::Return { return_value } =>
-        {
+        BaseExprData::Return { return_value } => {
             print!("Return(");
-            match return_value
-            {
+            match return_value {
                 Some(expr) => print_recursive_expression(expr),
                 None => print!(""),
             }
@@ -2301,8 +2078,7 @@ fn print_expression(expression: &BaseExpr<()>, indentation: i32) {
 }
 
 fn print_recursive_expression(expression: &RecExpr<()>) {
-    match &expression.data
-    {
+    match &expression.data {
         RecExprData::Variable { name } => print!("Var({name:?})"),
         RecExprData::Number { number } => print!("Num({number})"),
         RecExprData::String { value } => print!("Str({value:?})"),
@@ -2310,158 +2086,136 @@ fn print_recursive_expression(expression: &RecExpr<()>) {
         RecExprData::Assign {
             variable_name,
             right,
-        } =>
-        {
+        } => {
             print!("Var({variable_name:?}) = ");
             print_recursive_expression(&*right);
         }
-        RecExprData::Add { left, right } =>
-        {
+        RecExprData::Add { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" + ");
             print_recursive_expression(&*right);
             print!(")")
         }
-        RecExprData::Subtract { left, right } =>
-        {
+        RecExprData::Subtract { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" - ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExprData::Multiply { left, right } =>
-        {
+        RecExprData::Multiply { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" * ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExprData::Divide { left, right } =>
-        {
+        RecExprData::Divide { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" / ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExprData::Power { left, right } =>
-        {
+        RecExprData::Power { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" ^ ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExprData::Minus { right } =>
-        {
+        RecExprData::Minus { right } => {
             print!("(");
             print!("- ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExprData::Or { left, right } =>
-        {
+        RecExprData::Or { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" or ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExprData::And { left, right } =>
-        {
+        RecExprData::And { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" and ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExprData::Not { right } =>
-        {
+        RecExprData::Not { right } => {
             print!("(");
             print!("not ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExprData::Equals { left, right } =>
-        {
+        RecExprData::Equals { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" == ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExprData::NotEquals { left, right } =>
-        {
+        RecExprData::NotEquals { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" != ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExprData::LessThan { left, right } =>
-        {
+        RecExprData::LessThan { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" < ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExprData::LessThanOrEqual { left, right } =>
-        {
+        RecExprData::LessThanOrEqual { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" <= ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExprData::GreaterThan { left, right } =>
-        {
+        RecExprData::GreaterThan { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" > ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExprData::GreaterThanOrEqual { left, right } =>
-        {
+        RecExprData::GreaterThanOrEqual { left, right } => {
             print!("(");
             print_recursive_expression(&*left);
             print!(" >= ");
             print_recursive_expression(&*right);
             print!(")");
         }
-        RecExprData::Access { object, variable } =>
-        {
+        RecExprData::Access { object, variable } => {
             print!("{object:?}.{variable:?}");
         }
         RecExprData::FunctionCall {
             function_name,
             args,
-        } =>
-        {
+        } => {
             print!("Call({function_name:?} with (");
-            for arg in args
-            {
+            for arg in args {
                 print_recursive_expression(arg);
                 print!(", ");
             }
             print!("))");
         }
-        RecExprData::List { elements } =>
-        {
+        RecExprData::List { elements } => {
             print!("[");
-            for element in elements
-            {
+            for element in elements {
                 print_recursive_expression(element);
                 print!(", ");
             }
             print!("]");
         }
-        RecExprData::ListAccess { variable, index } =>
-        {
+        RecExprData::ListAccess { variable, index } => {
             print!("{variable:?}[");
             print_recursive_expression(index);
             print!("]");

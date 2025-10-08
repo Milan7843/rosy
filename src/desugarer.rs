@@ -5,8 +5,7 @@ use crate::parser::RecExpr;
 pub fn desugar(base_expressions: Vec<BaseExpr<()>>) -> Vec<BaseExpr<()>> {
     let mut desugared_expressions = Vec::new();
 
-    for base_expr in base_expressions
-    {
+    for base_expr in base_expressions {
         let desugared_expr = desugar_base_expr(base_expr);
         desugared_expressions.extend(desugared_expr);
     }
@@ -15,10 +14,8 @@ pub fn desugar(base_expressions: Vec<BaseExpr<()>>) -> Vec<BaseExpr<()>> {
 }
 
 fn desugar_base_expr(base_expr: BaseExpr<()>) -> Vec<BaseExpr<()>> {
-    match base_expr.data
-    {
-        parser::BaseExprData::PlusEqualsStatement { var_name, expr } =>
-        {
+    match base_expr.data {
+        parser::BaseExprData::PlusEqualsStatement { var_name, expr } => {
             let var_name_len = var_name.len();
             let assignment = BaseExpr {
                 data: parser::BaseExprData::VariableAssignment {
@@ -54,12 +51,10 @@ fn desugar_base_expr(base_expr: BaseExpr<()>) -> Vec<BaseExpr<()>> {
             var_name,
             until,
             body,
-        } =>
-        {
+        } => {
             let mut desugared_expressions = Vec::new();
 
-            for base_expr in body
-            {
+            for base_expr in body {
                 let desugared_expr = desugar_base_expr(base_expr);
                 desugared_expressions.extend(desugared_expr);
             }
@@ -79,20 +74,16 @@ fn desugar_base_expr(base_expr: BaseExpr<()>) -> Vec<BaseExpr<()>> {
             condition,
             body,
             else_statement,
-        } =>
-        {
+        } => {
             let mut desugared_expressions = Vec::new();
 
-            for base_expr in body
-            {
+            for base_expr in body {
                 let desugared_expr = desugar_base_expr(base_expr);
                 desugared_expressions.extend(desugared_expr);
             }
 
-            let desugared_else = match else_statement
-            {
-                Some(else_body) =>
-                {
+            let desugared_else = match else_statement {
+                Some(else_body) => {
                     let desugared_else = desugar_base_expr(*else_body);
                     let desugared_else = Box::new(desugared_else[0].clone());
                     Some(desugared_else)
@@ -116,20 +107,16 @@ fn desugar_base_expr(base_expr: BaseExpr<()>) -> Vec<BaseExpr<()>> {
             condition,
             body,
             else_statement,
-        } =>
-        {
+        } => {
             let mut desugared_expressions = Vec::new();
 
-            for base_expr in body
-            {
+            for base_expr in body {
                 let desugared_expr = desugar_base_expr(base_expr);
                 desugared_expressions.extend(desugared_expr);
             }
 
-            let desugared_else = match else_statement
-            {
-                Some(else_body) =>
-                {
+            let desugared_else = match else_statement {
+                Some(else_body) => {
                     let desugared_else = desugar_base_expr(*else_body);
                     let desugared_else = Box::new(desugared_else[0].clone());
                     Some(desugared_else)
@@ -149,12 +136,10 @@ fn desugar_base_expr(base_expr: BaseExpr<()>) -> Vec<BaseExpr<()>> {
                 generic_data: (),
             }];
         }
-        parser::BaseExprData::ElseStatement { body } =>
-        {
+        parser::BaseExprData::ElseStatement { body } => {
             let mut desugared_expressions = Vec::new();
 
-            for base_expr in body
-            {
+            for base_expr in body {
                 let desugared_expr = desugar_base_expr(base_expr);
                 desugared_expressions.extend(desugared_expr);
             }
@@ -172,12 +157,10 @@ fn desugar_base_expr(base_expr: BaseExpr<()>) -> Vec<BaseExpr<()>> {
             fun_name,
             args,
             body,
-        } =>
-        {
+        } => {
             let mut desugared_expressions = Vec::new();
 
-            for base_expr in body
-            {
+            for base_expr in body {
                 let desugared_expr = desugar_base_expr(base_expr);
                 desugared_expressions.extend(desugared_expr);
             }
@@ -193,8 +176,7 @@ fn desugar_base_expr(base_expr: BaseExpr<()>) -> Vec<BaseExpr<()>> {
                 generic_data: (),
             }];
         }
-        _ =>
-        {
+        _ => {
             return vec![base_expr];
         }
     }

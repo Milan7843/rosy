@@ -7,8 +7,7 @@ fn compare(
     expected: Vec<BaseExpr<()>>,
     program: &Vec<&str>,
 ) {
-    match actual
-    {
+    match actual {
         Ok(tokens) => assert_eq!(tokens, expected),
         Err(e) => print_error(&e, program),
     }
@@ -19,12 +18,9 @@ fn compare_linewise(
     expected: Vec<BaseExpr<()>>,
     program: &Vec<&str>,
 ) {
-    match actual
-    {
-        Ok(tokens) =>
-        {
-            if tokens.len() != expected.len()
-            {
+    match actual {
+        Ok(tokens) => {
+            if tokens.len() != expected.len() {
                 panic!(
                     "Expected and actual have differing lengths ({} and {})",
                     expected.len(),
@@ -34,8 +30,7 @@ fn compare_linewise(
 
             let it = tokens.iter().zip(expected.iter());
 
-            for (_, (act, exp)) in it.enumerate()
-            {
+            for (_, (act, exp)) in it.enumerate() {
                 assert_eq!(act, exp);
             }
         }

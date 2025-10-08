@@ -79,31 +79,23 @@ struct Cli {
 pub fn main() {
     let args = Cli::parse();
 
-    match args.command
-    {
-        Command::Run { path } => match pipeline::run_pipeline_from_path(&path)
-        {
-            Ok(_) =>
-            {}
+    match args.command {
+        Command::Run { path } => match pipeline::run_pipeline_from_path(&path) {
+            Ok(_) => {}
             Err(err) => println!("{err}"),
         },
-        Command::Compile { path } =>
-        {
-            match pipeline::run_compilation_pipeline_from_path(&path)
-            {
-                Ok(_) =>
-                {}
+        Command::Compile { path } => {
+            match pipeline::run_compilation_pipeline_from_path(&path) {
+                Ok(_) => {}
                 Err(err) => println!("{err}"),
             }
             //exewriter::write_exe_file(&path.with_extension("exe")).unwrap();
             //println!("Compiled to {}", path.with_extension("exe").display());
         }
-        Command::Typecheck { path } => match pipeline::run_typecheck_pipeline_from_path(&path)
-        {
+        Command::Typecheck { path } => match pipeline::run_typecheck_pipeline_from_path(&path) {
             Ok(_) => println!("Typecheck passed"),
             Err(err) => println!("Typecheck error: {err}"),
         },
-        Command::Debug { path: _ } =>
-        {}
+        Command::Debug { path: _ } => {}
     }
 }

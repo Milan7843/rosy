@@ -8,8 +8,7 @@ use rosy::{
 };
 
 fn compare(actual: Result<Terminal, Error>, expected: Terminal) {
-    match actual
-    {
+    match actual {
         Ok(tokens) => assert_eq!(tokens, expected),
         Err(_) => panic!(" error "),
     }

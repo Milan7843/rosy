@@ -6,6 +6,7 @@ use crate::parser;
 use crate::tokenizer;
 use crate::tokenizer::Error;
 use crate::typechecker;
+use crate::uniquify;
 
 pub fn run_typecheck_pipeline_from_path(path: &std::path::PathBuf) -> Result<String, String> {
     // Read the file into a big string
@@ -20,11 +21,9 @@ pub fn run_typecheck_pipeline_from_path(path: &std::path::PathBuf) -> Result<Str
 
 pub fn run_typecheck_pipeline(lines: Vec<&str>) -> Result<String, String> {
     let lines_copy = lines.clone();
-    let base_expressions: Vec<parser::BaseExpr<()>> = match parser::parse_strings(lines)
-    {
+    let base_expressions: Vec<parser::BaseExpr<()>> = match parser::parse_strings(lines) {
         Ok(base_expressions) => base_expressions,
-        Err(error) =>
-        {
+        Err(error) => {
             print_error(&error, &lines_copy);
             return Err(String::new());
         }
@@ -32,12 +31,9 @@ pub fn run_typecheck_pipeline(lines: Vec<&str>) -> Result<String, String> {
 
     let desugared_base_expressions = desugarer::desugar(base_expressions);
 
-    match typechecker::type_check_program(desugared_base_expressions, true)
-    {
-        Ok(_) =>
-        {}
-        Err(error) =>
-        {
+    match typechecker::type_check_program(desugared_base_expressions, true) {
+        Ok(_) => {}
+        Err(error) => {
             print_error(&error, &lines_copy);
             return Err(String::new());
         }
@@ -59,21 +55,17 @@ pub fn run_pipeline_from_path(path: &std::path::PathBuf) -> Result<interpreter::
 
 pub fn run_pipeline(lines: Vec<&str>) -> Result<interpreter::Terminal, String> {
     let lines_copy = lines.clone();
-    let base_expressions: Vec<parser::BaseExpr<()>> = match parser::parse_strings(lines)
-    {
+    let base_expressions: Vec<parser::BaseExpr<()>> = match parser::parse_strings(lines) {
         Ok(base_expressions) => base_expressions,
-        Err(error) =>
-        {
+        Err(error) => {
             print_error(&error, &lines_copy);
             return Err(String::new());
         }
     };
 
-    let output_terminal = match interpreter::interpret(base_expressions)
-    {
+    let output_terminal = match interpreter::interpret(base_expressions) {
         Ok(output_terminal) => output_terminal,
-        Err(error) =>
-        {
+        Err(error) => {
             print_error(&error, &lines_copy);
             return Err(String::new());
         }
@@ -95,11 +87,9 @@ pub fn run_compilation_pipeline_from_path(path: &std::path::PathBuf) -> Result<(
 
 pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
     let lines_copy = lines.clone();
-    let base_expressions: Vec<parser::BaseExpr<()>> = match parser::parse_strings(lines)
-    {
+    let base_expressions: Vec<parser::BaseExpr<()>> = match parser::parse_strings(lines) {
         Ok(base_expressions) => base_expressions,
-        Err(error) =>
-        {
+        Err(error) => {
             print_error(&error, &lines_copy);
             return Err(String::new());
         }
@@ -107,23 +97,26 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
 
     let desugared_base_expressions = desugarer::desugar(base_expressions);
 
-    let typed_program =
-        match typechecker::type_check_program(desugared_base_expressions.clone(), false)
-        {
+
+    let mut typed_program =
+        match typechecker::type_check_program(desugared_base_expressions.clone(), false) {
             Ok(typed_program) => typed_program,
-            Err(error) =>
-            {
+            Err(error) => {
                 print_error(&error, &lines_copy);
                 return Err(String::new());
             }
         };
 
-    match crate::compiler::compile(typed_program)
-    {
-        Ok(_) =>
-        {}
-        Err(error) =>
-        {
+    print!("Typed program:\n{:#?}\n", typed_program);
+
+    // Perform uniquification
+    uniquify::uniquify(&mut typed_program);
+
+    print!("Uniquified program:\n{:#?}\n", typed_program);
+
+    match crate::compiler::compile(typed_program) {
+        Ok(_) => {}
+        Err(error) => {
             print_error(&error, &lines_copy);
             return Err(String::new());
         }
@@ -133,10 +126,8 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
 }
 
 pub fn print_error(error: &Error, lines: &Vec<&str>) {
-    match error
-    {
-        Error::SimpleError { message } =>
-        {
+    match error {
+        Error::SimpleError { message } => {
             println!("Error: {}", message);
         }
         Error::LocationError {
@@ -144,8 +135,7 @@ pub fn print_error(error: &Error, lines: &Vec<&str>) {
             row,
             col_start,
             col_end,
-        } =>
-        {
+        } => {
             println!("{}", lines[*row as usize]);
             println!(
                 "{}{}",
@@ -166,8 +156,7 @@ pub fn print_error(error: &Error, lines: &Vec<&str>) {
             row,
             col_start,
             col_end,
-        } =>
-        {
+        } => {
             println!("{}", lines[*row as usize]);
             println!(
                 "{}{}",

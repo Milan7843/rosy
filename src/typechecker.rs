@@ -39,11 +39,11 @@ type FunctionEnvironment = Vec<FunctionBinding>;
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct FunctionType {
-    pub(crate) name: String,
-    pub(crate) param_names: Vec<String>,
-    pub(crate) param_types: Vec<Type>,
-    pub(crate) return_type: Type,
-    pub(crate) content: Vec<BaseExpr<Type>>, // The content of the function with types filled in
+    pub name: String,
+    pub param_names: Vec<String>,
+    pub param_types: Vec<Type>,
+    pub return_type: Type,
+    pub content: Vec<BaseExpr<Type>>, // The content of the function with types filled in
 }
 
 struct TypeEnvironment {
@@ -53,18 +53,15 @@ struct TypeEnvironment {
 
 fn print_type_env(env: &TypeEnvironment) {
     print!("Type Environment: ");
-    for (i, scope) in env.scopes.iter().enumerate()
-    {
+    for (i, scope) in env.scopes.iter().enumerate() {
         print!("scope {}: [", i);
-        for binding in scope.iter()
-        {
+        for binding in scope.iter() {
             print!("{}: {:?}, ", binding.name, binding.value_type);
         }
         print!("], ");
     }
     print!("Functions: [");
-    for func in env.functions.iter()
-    {
+    for func in env.functions.iter() {
         print!(
             "({}: {:?} -> {:?}), ",
             func.name, func.param_types, func.return_type
@@ -75,8 +72,7 @@ fn print_type_env(env: &TypeEnvironment) {
 
 fn print_function_env(func_env: &FunctionEnvironment) {
     print!("Function Environment: [");
-    for func in func_env.iter()
-    {
+    for func in func_env.iter() {
         print!("{}({:?}), ", func.name, func.param_names);
     }
     print!("]\n");
@@ -143,16 +139,13 @@ fn add_default_functions_to_env(env: &mut TypeEnvironment) {
 }
 
 fn preload_functions(base_expressions: &Vec<BaseExpr<()>>, func_env: &mut FunctionEnvironment) {
-    for base_expr in base_expressions.iter()
-    {
-        match &base_expr.data
-        {
+    for base_expr in base_expressions.iter() {
+        match &base_expr.data {
             BaseExprData::FunctionDefinition {
                 fun_name,
                 args,
                 body,
-            } =>
-            {
+            } => {
                 let func_binding = FunctionBinding {
                     name: fun_name.clone(),
                     param_names: args.clone(),
@@ -160,8 +153,7 @@ fn preload_functions(base_expressions: &Vec<BaseExpr<()>>, func_env: &mut Functi
                 };
                 func_env.push(func_binding);
             }
-            _ =>
-            {}
+            _ => {}
         }
     }
 }
@@ -171,13 +163,10 @@ fn find_matching_function_in_function_env(
     param_types: &Vec<Type>,
     func_env: &FunctionEnvironment,
 ) -> Option<FunctionBinding> {
-    for func in func_env.iter()
-    {
-        if func.name == *name
-        {
+    for func in func_env.iter() {
+        if func.name == *name {
             // We have found a function with the correct name, now we need to check the parameter types
-            if func.param_names.len() == param_types.len()
-            {
+            if func.param_names.len() == param_types.len() {
                 return Some(func.clone());
             }
         }
@@ -195,12 +184,9 @@ fn find_matching_function_in_env(
     env: &mut TypeEnvironment,
     func_env: &FunctionEnvironment,
 ) -> Result<Type, Error> {
-    for function in env.functions.iter()
-    {
-        if function.name == *name
-        {
-            if function.param_types == *param_types
-            {
+    for function in env.functions.iter() {
+        if function.name == *name {
+            if function.param_types == *param_types {
                 return Ok(function.return_type.clone());
             }
         }
@@ -208,10 +194,8 @@ fn find_matching_function_in_env(
 
     // If we cannot find a function with that name and parameter types, we type-check the function with the given name
     // but with these new parameter types
-    match find_matching_function_in_function_env(name, param_types, func_env)
-    {
-        Some(func) =>
-        {
+    match find_matching_function_in_function_env(name, param_types, func_env) {
+        Some(func) => {
             // We have found a function with the correct name, now we need to type-check it with the given parameter types
             let mut new_env: TypeEnvironment = TypeEnvironment {
                 scopes: Vec::new(),
@@ -221,8 +205,7 @@ fn find_matching_function_in_env(
 
             // So we add the parameter types to the new environment
             // with the names given in the function definition
-            for (i, param_name) in func.param_names.iter().enumerate()
-            {
+            for (i, param_name) in func.param_names.iter().enumerate() {
                 new_env.scopes.last_mut().unwrap().push(TypeBinding {
                     name: param_name.clone(),
                     value_type: param_types[i].clone(),
@@ -236,13 +219,10 @@ fn find_matching_function_in_env(
                 func_env,
                 false,
                 &mut expected_return_type,
-            )
-            {
-                Ok(typed_base_expressions) =>
-                {
+            ) {
+                Ok(typed_base_expressions) => {
                     // If the function has no return statement, we set the return type to undefined
-                    let return_type = match expected_return_type
-                    {
+                    let return_type = match expected_return_type {
                         Some(rt) => rt,
                         None => Type::Undefined,
                     };
@@ -257,14 +237,12 @@ fn find_matching_function_in_env(
                     });
                     return Ok(return_type);
                 }
-                Err(error) =>
-                {
+                Err(error) => {
                     return Err(error);
                 }
             }
         }
-        None =>
-        {
+        None => {
             return Err(Error::SimpleError {
                 message: format!(
                     "Function '{}' with parameter types {:?} not found",
@@ -276,10 +254,8 @@ fn find_matching_function_in_env(
 }
 
 fn update_in_env(value: &Type, name: &String, env: &mut TypeEnvironment) -> bool {
-    for scope in env.scopes.iter_mut().rev()
-    {
-        if update_in_scope(value, name, scope)
-        {
+    for scope in env.scopes.iter_mut().rev() {
+        if update_in_scope(value, name, scope) {
             return true;
         }
     }
@@ -287,10 +263,8 @@ fn update_in_env(value: &Type, name: &String, env: &mut TypeEnvironment) -> bool
 }
 
 fn update_in_scope(value: &Type, name: &String, scope: &mut TypeScope) -> bool {
-    for binding in scope.iter_mut()
-    {
-        if binding.name == *name
-        {
+    for binding in scope.iter_mut() {
+        if binding.name == *name {
             binding.value_type = value.clone();
             return true;
         }
@@ -299,8 +273,7 @@ fn update_in_scope(value: &Type, name: &String, scope: &mut TypeScope) -> bool {
 }
 
 fn update_or_add_in_scope(value: &Type, name: &String, scope: &mut TypeScope) {
-    if update_in_scope(value, name, scope)
-    {
+    if update_in_scope(value, name, scope) {
         return;
     }
 
@@ -311,23 +284,18 @@ fn update_or_add_in_scope(value: &Type, name: &String, scope: &mut TypeScope) {
 }
 
 fn find_in_env(name: &String, env: &TypeEnvironment) -> Option<Type> {
-    for scope in env.scopes.iter().rev()
-    {
-        match find_in_scope(name, scope)
-        {
+    for scope in env.scopes.iter().rev() {
+        match find_in_scope(name, scope) {
             Some(value) => return Some(value),
-            None =>
-            {}
+            None => {}
         }
     }
     return None;
 }
 
 fn find_in_scope(name: &String, scope: &TypeScope) -> Option<Type> {
-    for binding in scope.iter()
-    {
-        if binding.name == *name
-        {
+    for binding in scope.iter() {
+        if binding.name == *name {
             return Some(binding.value_type.clone());
         }
     }
@@ -360,9 +328,10 @@ pub fn type_check_program(
         &func_env,
         print_results,
         &mut expected_return_type,
-    )
-    {
-        Ok((typed_base_expressions, typed_functions)) => Ok((typed_base_expressions, typed_functions)),
+    ) {
+        Ok((typed_base_expressions, typed_functions)) => {
+            Ok((typed_base_expressions, typed_functions))
+        }
         Err(error) => Err(error),
     }
 }
@@ -379,13 +348,10 @@ fn type_check(
 ) -> Result<(Vec<BaseExpr<Type>>, Vec<FunctionType>), Error> {
     let mut typed_base_expressions: Vec<BaseExpr<Type>> = Vec::new();
 
-    for base_expr in base_expressions
-    {
+    for base_expr in base_expressions {
         print_type_env(&env);
-        match base_expr.data
-        {
-            BaseExprData::Simple { expr: rec_expr } =>
-            {
+        match base_expr.data {
+            BaseExprData::Simple { expr: rec_expr } => {
                 let rec_expr_typed = check_type_rec(rec_expr, env, func_env)?;
                 let rec_expr_type = rec_expr_typed.generic_data.clone();
                 typed_base_expressions.push(BaseExpr {
@@ -398,13 +364,11 @@ fn type_check(
                     generic_data: rec_expr_type,
                 });
             }
-            BaseExprData::VariableAssignment { var_name, expr } =>
-            {
+            BaseExprData::VariableAssignment { var_name, expr } => {
                 let expr_typed = check_type_rec(expr, env, func_env)?;
                 let expr_type = expr_typed.generic_data.clone();
                 update_or_add_in_scope(&expr_type, &var_name, env.scopes.last_mut().unwrap());
-                if print_results
-                {
+                if print_results {
                     println!("Variable '{}' has type {:?}", var_name, expr_type);
                 }
                 typed_base_expressions.push(BaseExpr {
@@ -422,8 +386,7 @@ fn type_check(
                 fun_name,
                 args,
                 body,
-            } =>
-            {
+            } => {
                 // We don't need to do anything here, as functions are handled separately at the start of type-checking
                 // They will also not be included in the list of typed base expressions returned
             }
@@ -431,8 +394,7 @@ fn type_check(
                 condition,
                 body,
                 else_statement,
-            } =>
-            {
+            } => {
                 let condition_row = condition.row;
                 let condition_col_start = condition.col_start;
                 let condition_col_end = condition.col_end;
@@ -440,8 +402,7 @@ fn type_check(
                 let cond_typed = check_type_rec(condition, env, func_env)?;
                 let cond_type = cond_typed.generic_data.clone();
 
-                if cond_type != Type::Boolean
-                {
+                if cond_type != Type::Boolean {
                     return Err(Error::TypeError {
                         message: "If condition must be of type Boolean".to_string(),
                         expected: Type::Boolean,
@@ -458,10 +419,8 @@ fn type_check(
                     type_check(body, env, func_env, print_results, expected_return_type)?.0;
                 env.scopes.pop();
 
-                let else_typed = match else_statement
-                {
-                    Some(else_expr) =>
-                    {
+                let else_typed = match else_statement {
+                    Some(else_expr) => {
                         env.scopes.push(Vec::new());
                         let else_typed = type_check(
                             vec![*else_expr],
@@ -469,7 +428,8 @@ fn type_check(
                             func_env,
                             print_results,
                             expected_return_type,
-                        )?.0;
+                        )?
+                        .0;
                         env.scopes.pop();
                         Some(Box::new(else_typed[0].clone()))
                     }
@@ -491,8 +451,7 @@ fn type_check(
                 condition,
                 body,
                 else_statement,
-            } =>
-            {
+            } => {
                 let condition_row = condition.row;
                 let condition_col_start = condition.col_start;
                 let condition_col_end = condition.col_end;
@@ -500,8 +459,7 @@ fn type_check(
                 let cond_typed = check_type_rec(condition, env, func_env)?;
                 let cond_type = cond_typed.generic_data.clone();
 
-                if cond_type != Type::Boolean
-                {
+                if cond_type != Type::Boolean {
                     return Err(Error::TypeError {
                         message: "If condition must be of type Boolean".to_string(),
                         expected: Type::Boolean,
@@ -518,10 +476,8 @@ fn type_check(
                     type_check(body, env, func_env, print_results, expected_return_type)?.0;
                 env.scopes.pop();
 
-                let else_typed = match else_statement
-                {
-                    Some(else_expr) =>
-                    {
+                let else_typed = match else_statement {
+                    Some(else_expr) => {
                         env.scopes.push(Vec::new());
                         let else_typed = type_check(
                             vec![*else_expr],
@@ -529,7 +485,8 @@ fn type_check(
                             func_env,
                             print_results,
                             expected_return_type,
-                        )?.0;
+                        )?
+                        .0;
                         env.scopes.pop();
                         Some(Box::new(else_typed[0].clone()))
                     }
@@ -547,8 +504,7 @@ fn type_check(
                     generic_data: Type::Undefined, // We do not store the type of if statements
                 });
             }
-            BaseExprData::ElseStatement { body } =>
-            {
+            BaseExprData::ElseStatement { body } => {
                 // Typecheck the body in a new scope
                 env.scopes.push(Vec::new());
                 let body_typed =
@@ -565,13 +521,10 @@ fn type_check(
             }
             BaseExprData::Return {
                 return_value: optional_return_value,
-            } =>
-            {
-                let return_value = match optional_return_value
-                {
+            } => {
+                let return_value = match optional_return_value {
                     Some(rv) => rv,
-                    None =>
-                    {
+                    None => {
                         // Define the function to return undefined (no return value)
                         *expected_return_type = Some(Type::Undefined);
 
@@ -590,12 +543,9 @@ fn type_check(
                 let return_typed = check_type_rec(return_value, env, func_env)?;
                 let return_type = return_typed.generic_data.clone();
 
-                match &expected_return_type
-                {
-                    Some(expected_type) =>
-                    {
-                        if *expected_type != return_type
-                        {
+                match &expected_return_type {
+                    Some(expected_type) => {
+                        if *expected_type != return_type {
                             return Err(Error::TypeError {
                                 message: "Return type does not match expected return type"
                                     .to_string(),
@@ -607,8 +557,7 @@ fn type_check(
                             });
                         }
                     }
-                    None =>
-                    {
+                    None => {
                         // If there was no expected return type, we set it to the current return type
                         *expected_return_type = Some(return_type.clone());
                     }
@@ -628,19 +577,16 @@ fn type_check(
                 var_name,
                 until,
                 body,
-            } =>
-            {
+            } => {
                 let until_row = until.row;
                 let until_col_start = until.col_start;
                 let until_col_end = until.col_end;
 
                 let iteration_typed = check_type_rec(until, env, func_env)?;
-                let iteration_variable_type = match iteration_typed.generic_data.clone()
-                {
+                let iteration_variable_type = match iteration_typed.generic_data.clone() {
                     Type::Integer => Type::Integer,
                     Type::List(list_type) => *list_type,
-                    other_type =>
-                    {
+                    other_type => {
                         return Err(Error::LocationError {
                             message: format!(
                                 "For loop iteration cannot be of type {:?}",
@@ -676,8 +622,7 @@ fn type_check(
                     generic_data: Type::Undefined, // We do not store the type of for loops
                 });
             }
-            BaseExprData::Break =>
-            {
+            BaseExprData::Break => {
                 typed_base_expressions.push(BaseExpr {
                     data: BaseExprData::Break,
                     row: base_expr.row,
@@ -686,8 +631,7 @@ fn type_check(
                     generic_data: Type::Undefined, // We do not store the type of break statements
                 });
             }
-            _ =>
-            {
+            _ => {
                 unimplemented!(
                     "Only RecExpr is implemented in type_check, not {:?}",
                     base_expr.data
@@ -714,10 +658,8 @@ pub fn get_type(base_expr: BaseExpr<()>) -> Result<BaseExpr<Type>, Error> {
 
     let func_env: FunctionEnvironment = Vec::new();
 
-    match base_expr.data
-    {
-        BaseExprData::Simple { expr: rec_expr } =>
-        {
+    match base_expr.data {
+        BaseExprData::Simple { expr: rec_expr } => {
             let rec_expr_typed = check_type_rec(rec_expr, &mut env, &func_env)?;
             let rec_expr_type = rec_expr_typed.generic_data.clone();
             return Ok(BaseExpr {
@@ -730,8 +672,7 @@ pub fn get_type(base_expr: BaseExpr<()>) -> Result<BaseExpr<Type>, Error> {
                 generic_data: rec_expr_type,
             });
         }
-        _ =>
-        {
+        _ => {
             unimplemented!("Only RecExpr is implemented in get_type");
         }
     }
@@ -746,8 +687,7 @@ fn check_type_rec(
     let rec_expr_col_start = rec_expr.col_start;
     let rec_expr_col_end = rec_expr.col_end;
 
-    return match rec_expr.data
-    {
+    return match rec_expr.data {
         RecExprData::Number { number } => Ok(RecExpr {
             data: RecExprData::Number { number },
             row: rec_expr_row,
@@ -769,10 +709,8 @@ fn check_type_rec(
             col_end: rec_expr_col_end,
             generic_data: Type::String,
         }),
-        RecExprData::List { elements } =>
-        {
-            if elements.len() == 0
-            {
+        RecExprData::List { elements } => {
+            if elements.len() == 0 {
                 return Ok(RecExpr {
                     data: RecExprData::List {
                         elements: Vec::new(),
@@ -788,12 +726,10 @@ fn check_type_rec(
             let mut typed_elements = Vec::<RecExpr<Type>>::new();
             typed_elements.push(first_elem_typed);
 
-            for elem in elements.iter().skip(1)
-            {
+            for elem in elements.iter().skip(1) {
                 let elem_typed = check_type_rec(elem.clone(), env, func_env)?;
                 let elem_type = elem_typed.generic_data.clone();
-                if elem_type != first_elem_type
-                {
+                if elem_type != first_elem_type {
                     return Err(Error::TypeError {
                         message: "List elements must be of the same type".to_string(),
                         expected: first_elem_type,
@@ -815,8 +751,7 @@ fn check_type_rec(
                 generic_data: Type::List(Box::new(first_elem_type)),
             });
         }
-        RecExprData::Add { left, right } =>
-        {
+        RecExprData::Add { left, right } => {
             let row = left.row;
             let left_col_start = left.col_start;
             let right_col_end = right.col_end;
@@ -825,8 +760,7 @@ fn check_type_rec(
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
 
-            if left_type == Type::Integer && right_type == Type::Integer
-            {
+            if left_type == Type::Integer && right_type == Type::Integer {
                 return Ok(RecExpr {
                     data: RecExprData::Add {
                         left: Box::new(left_typed),
@@ -837,8 +771,7 @@ fn check_type_rec(
                     col_end: right_col_end,
                     generic_data: Type::Integer,
                 });
-            }
-            else if (left_type == Type::Integer || left_type == Type::Float)
+            } else if (left_type == Type::Integer || left_type == Type::Float)
                 && (right_type == Type::Integer || right_type == Type::Float)
             {
                 return Ok(RecExpr {
@@ -851,9 +784,7 @@ fn check_type_rec(
                     col_end: right_col_end,
                     generic_data: Type::Float,
                 });
-            }
-            else if left_type == Type::String && right_type == Type::String
-            {
+            } else if left_type == Type::String && right_type == Type::String {
                 return Ok(RecExpr {
                     data: RecExprData::Add {
                         left: Box::new(left_typed),
@@ -864,9 +795,7 @@ fn check_type_rec(
                     col_end: right_col_end,
                     generic_data: Type::String,
                 });
-            }
-            else
-            {
+            } else {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for addition".to_string(),
                     expected: left_type,
@@ -877,8 +806,7 @@ fn check_type_rec(
                 });
             }
         }
-        RecExprData::Multiply { left, right } =>
-        {
+        RecExprData::Multiply { left, right } => {
             let row = left.row;
             let left_col_start = left.col_start;
             let right_col_end = right.col_end;
@@ -887,8 +815,7 @@ fn check_type_rec(
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
 
-            if left_type == Type::Integer && right_type == Type::Integer
-            {
+            if left_type == Type::Integer && right_type == Type::Integer {
                 return Ok(RecExpr {
                     data: RecExprData::Multiply {
                         left: Box::new(left_typed),
@@ -899,8 +826,7 @@ fn check_type_rec(
                     col_end: right_col_end,
                     generic_data: Type::Integer,
                 });
-            }
-            else if (left_type == Type::Integer || left_type == Type::Float)
+            } else if (left_type == Type::Integer || left_type == Type::Float)
                 && (right_type == Type::Integer || right_type == Type::Float)
             {
                 return Ok(RecExpr {
@@ -913,9 +839,7 @@ fn check_type_rec(
                     col_end: right_col_end,
                     generic_data: Type::Float,
                 });
-            }
-            else
-            {
+            } else {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for multiplication".to_string(),
                     expected: left_type,
@@ -926,8 +850,7 @@ fn check_type_rec(
                 });
             }
         }
-        RecExprData::Divide { left, right } =>
-        {
+        RecExprData::Divide { left, right } => {
             let row = left.row;
             let left_col_start = left.col_start;
             let right_col_end = right.col_end;
@@ -936,8 +859,7 @@ fn check_type_rec(
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
 
-            if left_type == Type::Integer && right_type == Type::Integer
-            {
+            if left_type == Type::Integer && right_type == Type::Integer {
                 return Ok(RecExpr {
                     data: RecExprData::Divide {
                         left: Box::new(left_typed),
@@ -948,8 +870,7 @@ fn check_type_rec(
                     col_end: right_col_end,
                     generic_data: Type::Integer,
                 });
-            }
-            else if (left_type == Type::Integer || left_type == Type::Float)
+            } else if (left_type == Type::Integer || left_type == Type::Float)
                 && (right_type == Type::Integer || right_type == Type::Float)
             {
                 return Ok(RecExpr {
@@ -962,9 +883,7 @@ fn check_type_rec(
                     col_end: right_col_end,
                     generic_data: Type::Float,
                 });
-            }
-            else
-            {
+            } else {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for division".to_string(),
                     expected: left_type,
@@ -975,8 +894,7 @@ fn check_type_rec(
                 });
             }
         }
-        RecExprData::Subtract { left, right } =>
-        {
+        RecExprData::Subtract { left, right } => {
             let row = left.row;
             let left_col_start = left.col_start;
             let right_col_end = right.col_end;
@@ -985,8 +903,7 @@ fn check_type_rec(
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
 
-            if left_type == Type::Integer && right_type == Type::Integer
-            {
+            if left_type == Type::Integer && right_type == Type::Integer {
                 return Ok(RecExpr {
                     data: RecExprData::Subtract {
                         left: Box::new(left_typed),
@@ -997,8 +914,7 @@ fn check_type_rec(
                     col_end: right_col_end,
                     generic_data: Type::Integer,
                 });
-            }
-            else if (left_type == Type::Integer || left_type == Type::Float)
+            } else if (left_type == Type::Integer || left_type == Type::Float)
                 && (right_type == Type::Integer || right_type == Type::Float)
             {
                 return Ok(RecExpr {
@@ -1011,9 +927,7 @@ fn check_type_rec(
                     col_end: right_col_end,
                     generic_data: Type::Float,
                 });
-            }
-            else
-            {
+            } else {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for subtraction".to_string(),
                     expected: left_type,
@@ -1024,8 +938,7 @@ fn check_type_rec(
                 });
             }
         }
-        RecExprData::Power { left, right } =>
-        {
+        RecExprData::Power { left, right } => {
             let row = left.row;
             let left_col_start = left.col_start;
             let right_col_end = right.col_end;
@@ -1034,8 +947,7 @@ fn check_type_rec(
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
 
-            if left_type == Type::Integer && right_type == Type::Integer
-            {
+            if left_type == Type::Integer && right_type == Type::Integer {
                 return Ok(RecExpr {
                     data: RecExprData::Power {
                         left: Box::new(left_typed),
@@ -1046,8 +958,7 @@ fn check_type_rec(
                     col_end: right_col_end,
                     generic_data: Type::Integer,
                 });
-            }
-            else if (left_type == Type::Integer || left_type == Type::Float)
+            } else if (left_type == Type::Integer || left_type == Type::Float)
                 && (right_type == Type::Integer || right_type == Type::Float)
             {
                 return Ok(RecExpr {
@@ -1060,9 +971,7 @@ fn check_type_rec(
                     col_end: right_col_end,
                     generic_data: Type::Float,
                 });
-            }
-            else
-            {
+            } else {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for exponentiation".to_string(),
                     expected: left_type,
@@ -1073,16 +982,14 @@ fn check_type_rec(
                 });
             }
         }
-        RecExprData::Minus { right } =>
-        {
+        RecExprData::Minus { right } => {
             let row = right.row;
             let col_start = right.col_start;
             let col_end = right.col_end;
             let right_typed = check_type_rec(*right, env, func_env)?;
             let right_type = right_typed.generic_data.clone();
 
-            if right_type == Type::Integer
-            {
+            if right_type == Type::Integer {
                 return Ok(RecExpr {
                     data: RecExprData::Minus {
                         right: Box::new(right_typed),
@@ -1092,9 +999,7 @@ fn check_type_rec(
                     col_end: col_end,
                     generic_data: Type::Integer,
                 });
-            }
-            else if right_type == Type::Float
-            {
+            } else if right_type == Type::Float {
                 return Ok(RecExpr {
                     data: RecExprData::Minus {
                         right: Box::new(right_typed),
@@ -1104,9 +1009,7 @@ fn check_type_rec(
                     col_end: col_end,
                     generic_data: Type::Float,
                 });
-            }
-            else
-            {
+            } else {
                 return Err(Error::TypeError {
                     message: "Invalid operand type for negation".to_string(),
                     expected: Type::Integer,
@@ -1117,8 +1020,7 @@ fn check_type_rec(
                 });
             }
         }
-        RecExprData::Or { left, right } =>
-        {
+        RecExprData::Or { left, right } => {
             let row = left.row;
             let left_col_start = left.col_start;
             let right_col_start = right.col_start;
@@ -1130,8 +1032,7 @@ fn check_type_rec(
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
 
-            if left_type == Type::Boolean && right_type == Type::Boolean
-            {
+            if left_type == Type::Boolean && right_type == Type::Boolean {
                 return Ok(RecExpr {
                     data: RecExprData::Or {
                         left: Box::new(left_typed),
@@ -1142,9 +1043,7 @@ fn check_type_rec(
                     col_end: right_col_end,
                     generic_data: Type::Boolean,
                 });
-            }
-            else if left_type != Type::Boolean
-            {
+            } else if left_type != Type::Boolean {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for logical OR".to_string(),
                     expected: Type::Boolean,
@@ -1153,9 +1052,7 @@ fn check_type_rec(
                     col_start: left_col_start,
                     col_end: left_col_end,
                 });
-            }
-            else
-            {
+            } else {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for logical OR".to_string(),
                     expected: Type::Boolean,
@@ -1166,8 +1063,7 @@ fn check_type_rec(
                 });
             }
         }
-        RecExprData::And { left, right } =>
-        {
+        RecExprData::And { left, right } => {
             let row = left.row;
             let left_col_start = left.col_start;
             let right_col_start = right.col_start;
@@ -1179,8 +1075,7 @@ fn check_type_rec(
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
 
-            if left_type == Type::Boolean && right_type == Type::Boolean
-            {
+            if left_type == Type::Boolean && right_type == Type::Boolean {
                 return Ok(RecExpr {
                     data: RecExprData::And {
                         left: Box::new(left_typed),
@@ -1191,9 +1086,7 @@ fn check_type_rec(
                     col_end: right_col_end,
                     generic_data: Type::Boolean,
                 });
-            }
-            else if left_type != Type::Boolean
-            {
+            } else if left_type != Type::Boolean {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for logical AND".to_string(),
                     expected: Type::Boolean,
@@ -1202,9 +1095,7 @@ fn check_type_rec(
                     col_start: left_col_start,
                     col_end: left_col_end,
                 });
-            }
-            else
-            {
+            } else {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for logical AND".to_string(),
                     expected: Type::Boolean,
@@ -1215,8 +1106,7 @@ fn check_type_rec(
                 });
             }
         }
-        RecExprData::Not { right } =>
-        {
+        RecExprData::Not { right } => {
             let row = right.row;
             let col_start = right.col_start;
             let col_end = right.col_end;
@@ -1224,8 +1114,7 @@ fn check_type_rec(
             let right_typed = check_type_rec(*right, env, func_env)?;
             let right_type = right_typed.generic_data.clone();
 
-            if right_type == Type::Boolean
-            {
+            if right_type == Type::Boolean {
                 return Ok(RecExpr {
                     data: RecExprData::Not {
                         right: Box::new(right_typed),
@@ -1235,9 +1124,7 @@ fn check_type_rec(
                     col_end: col_end,
                     generic_data: Type::Boolean,
                 });
-            }
-            else
-            {
+            } else {
                 return Err(Error::TypeError {
                     message: "Invalid operand type for logical NOT".to_string(),
                     expected: Type::Boolean,
@@ -1248,8 +1135,7 @@ fn check_type_rec(
                 });
             }
         }
-        RecExprData::Equals { left, right } =>
-        {
+        RecExprData::Equals { left, right } => {
             let row = left.row;
             let left_col_start = left.col_start;
             let right_col_end = right.col_end;
@@ -1259,8 +1145,7 @@ fn check_type_rec(
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
 
-            if left_type == right_type
-            {
+            if left_type == right_type {
                 return Ok(RecExpr {
                     data: RecExprData::Equals {
                         left: Box::new(left_typed),
@@ -1271,9 +1156,7 @@ fn check_type_rec(
                     col_end: right_col_end,
                     generic_data: Type::Boolean,
                 });
-            }
-            else
-            {
+            } else {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for equality check".to_string(),
                     expected: left_type,
@@ -1284,8 +1167,7 @@ fn check_type_rec(
                 });
             }
         }
-        RecExprData::NotEquals { left, right } =>
-        {
+        RecExprData::NotEquals { left, right } => {
             let row = left.row;
             let left_col_start = left.col_start;
             let right_col_end = right.col_end;
@@ -1295,8 +1177,7 @@ fn check_type_rec(
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
 
-            if left_type == right_type
-            {
+            if left_type == right_type {
                 return Ok(RecExpr {
                     data: RecExprData::NotEquals {
                         left: Box::new(left_typed),
@@ -1307,9 +1188,7 @@ fn check_type_rec(
                     col_end: right_col_end,
                     generic_data: Type::Boolean,
                 });
-            }
-            else
-            {
+            } else {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for inequality check".to_string(),
                     expected: left_type,
@@ -1320,8 +1199,7 @@ fn check_type_rec(
                 });
             }
         }
-        RecExprData::GreaterThan { left, right } =>
-        {
+        RecExprData::GreaterThan { left, right } => {
             let row = left.row;
             let left_col_start = left.col_start;
             let right_col_start = right.col_start;
@@ -1333,8 +1211,7 @@ fn check_type_rec(
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
 
-            if left_type != Type::Integer && left_type != Type::Float
-            {
+            if left_type != Type::Integer && left_type != Type::Float {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for greater-than check".to_string(),
                     expected: Type::Integer,
@@ -1344,8 +1221,7 @@ fn check_type_rec(
                     col_end: left_col_end,
                 });
             }
-            if right_type != Type::Integer && right_type != Type::Float
-            {
+            if right_type != Type::Integer && right_type != Type::Float {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for greater-than check".to_string(),
                     expected: Type::Integer,
@@ -1367,8 +1243,7 @@ fn check_type_rec(
                 generic_data: Type::Boolean,
             });
         }
-        RecExprData::LessThan { left, right } =>
-        {
+        RecExprData::LessThan { left, right } => {
             let row = left.row;
             let left_col_start = left.col_start;
             let right_col_start = right.col_start;
@@ -1380,8 +1255,7 @@ fn check_type_rec(
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
 
-            if left_type != Type::Integer && left_type != Type::Float
-            {
+            if left_type != Type::Integer && left_type != Type::Float {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for less-than check".to_string(),
                     expected: Type::Integer,
@@ -1391,8 +1265,7 @@ fn check_type_rec(
                     col_end: left_col_end,
                 });
             }
-            if right_type != Type::Integer && right_type != Type::Float
-            {
+            if right_type != Type::Integer && right_type != Type::Float {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for less-than check".to_string(),
                     expected: Type::Integer,
@@ -1414,8 +1287,7 @@ fn check_type_rec(
                 generic_data: Type::Boolean,
             });
         }
-        RecExprData::GreaterThanOrEqual { left, right } =>
-        {
+        RecExprData::GreaterThanOrEqual { left, right } => {
             let row = left.row;
             let left_col_start = left.col_start;
             let right_col_start = right.col_start;
@@ -1427,8 +1299,7 @@ fn check_type_rec(
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
 
-            if left_type != Type::Integer && left_type != Type::Float
-            {
+            if left_type != Type::Integer && left_type != Type::Float {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for greater-than-or-equal check".to_string(),
                     expected: Type::Integer,
@@ -1438,8 +1309,7 @@ fn check_type_rec(
                     col_end: left_col_end,
                 });
             }
-            if right_type != Type::Integer && right_type != Type::Float
-            {
+            if right_type != Type::Integer && right_type != Type::Float {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for greater-than-or-equal check".to_string(),
                     expected: Type::Integer,
@@ -1461,8 +1331,7 @@ fn check_type_rec(
                 generic_data: Type::Boolean,
             });
         }
-        RecExprData::LessThanOrEqual { left, right } =>
-        {
+        RecExprData::LessThanOrEqual { left, right } => {
             let row = left.row;
             let left_col_start = left.col_start;
             let right_col_start = right.col_start;
@@ -1474,8 +1343,7 @@ fn check_type_rec(
             let left_type = left_typed.generic_data.clone();
             let right_type = right_typed.generic_data.clone();
 
-            if left_type != Type::Integer && left_type != Type::Float
-            {
+            if left_type != Type::Integer && left_type != Type::Float {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for less-than-or-equal check".to_string(),
                     expected: Type::Integer,
@@ -1485,8 +1353,7 @@ fn check_type_rec(
                     col_end: left_col_end,
                 });
             }
-            if right_type != Type::Integer && right_type != Type::Float
-            {
+            if right_type != Type::Integer && right_type != Type::Float {
                 return Err(Error::TypeError {
                     message: "Invalid operand types for less-than-or-equal check".to_string(),
                     expected: Type::Integer,
@@ -1511,13 +1378,11 @@ fn check_type_rec(
         RecExprData::FunctionCall {
             function_name,
             args,
-        } =>
-        {
+        } => {
             // First we collect all of the given parameter types so we can match against them
             let mut arg_types: Vec<Type> = Vec::new();
             let mut args_typed: Vec<RecExpr<Type>> = Vec::new();
-            for (i, arg) in args.iter().enumerate()
-            {
+            for (i, arg) in args.iter().enumerate() {
                 let arg_typed = check_type_rec(arg.clone(), env, func_env)?;
                 args_typed.push(arg_typed.clone());
                 let arg_type = arg_typed.generic_data;
@@ -1527,13 +1392,10 @@ fn check_type_rec(
             // Then we look for a matching function in the environment
             let function_type =
                 find_matching_function_in_env(&function_name, &arg_types, env, func_env);
-            match function_type
-            {
-                Ok(return_type) =>
-                {
+            match function_type {
+                Ok(return_type) => {
                     // Check that the number of arguments matches the number of parameters
-                    if arg_types.len() != args.len()
-                    {
+                    if arg_types.len() != args.len() {
                         return Err(Error::LocationError {
                             message: format!(
                                 "Function '{}' expects {} arguments, but {} were provided",
@@ -1558,27 +1420,22 @@ fn check_type_rec(
                         generic_data: return_type,
                     });
                 }
-                Err(error) =>
-                {
+                Err(error) => {
                     return Err(error);
                 }
             }
         }
-        RecExprData::ListAccess { variable, index } =>
-        {
+        RecExprData::ListAccess { variable, index } => {
             let var_type = find_in_env(&variable, &env);
             let index_row = index.row;
             let index_col_start = index.col_start;
             let index_col_end = index.col_end;
 
-            match var_type
-            {
-                Some(Type::List(elem_type)) =>
-                {
+            match var_type {
+                Some(Type::List(elem_type)) => {
                     let index_typed = check_type_rec(*index, env, func_env)?;
                     let index_type = index_typed.generic_data.clone();
-                    if index_type != Type::Integer
-                    {
+                    if index_type != Type::Integer {
                         return Err(Error::TypeError {
                             message: "List index must be an integer".to_string(),
                             expected: Type::Integer,
@@ -1599,8 +1456,7 @@ fn check_type_rec(
                         generic_data: *elem_type,
                     });
                 }
-                Some(other_type) =>
-                {
+                Some(other_type) => {
                     return Err(Error::TypeError {
                         message: format!(
                             "Variable '{}' is of type {:?}, not a list",
@@ -1613,12 +1469,9 @@ fn check_type_rec(
                         col_end: rec_expr_col_end,
                     });
                 }
-                None =>
-                {
-                    return Err(Error::TypeError {
+                None => {
+                    return Err(Error::LocationError {
                         message: format!("Variable '{}' is not defined", variable),
-                        expected: Type::Undefined,
-                        found: Type::Undefined,
                         row: rec_expr_row,
                         col_start: rec_expr_col_start,
                         col_end: rec_expr_col_end,
@@ -1626,13 +1479,10 @@ fn check_type_rec(
                 }
             }
         }
-        RecExprData::Variable { name } =>
-        {
+        RecExprData::Variable { name } => {
             let var_type = find_in_env(&name, &env);
-            match var_type
-            {
-                Some(t) =>
-                {
+            match var_type {
+                Some(t) => {
                     return Ok(RecExpr {
                         data: RecExprData::Variable { name },
                         row: rec_expr_row,
@@ -1641,10 +1491,8 @@ fn check_type_rec(
                         generic_data: t,
                     });
                 }
-                None => Err(Error::TypeError {
+                None => Err(Error::LocationError {
                     message: format!("Variable '{}' is not defined", name),
-                    expected: Type::Undefined,
-                    found: Type::Undefined,
                     row: rec_expr_row,
                     col_start: rec_expr_col_start,
                     col_end: rec_expr_col_end,
@@ -1652,8 +1500,7 @@ fn check_type_rec(
             }
         }
 
-        _ =>
-        {
+        _ => {
             unimplemented!(
                 "check_type_rec not implemented for this RecExprData variant: {:?}",
                 rec_expr.data

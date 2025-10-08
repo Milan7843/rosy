@@ -6,20 +6,16 @@ use tokenizer::TokenData;
 use tokenizer::TokenLine;
 
 fn compare(actual: Result<Vec<TokenLine>, Error>, expected: Vec<TokenLine>) {
-    match actual
-    {
+    match actual {
         Ok(tokens) => assert_eq!(tokens, expected),
         Err(_) => panic!("error"),
     }
 }
 
 fn compare_linewise(actual: Result<Vec<TokenLine>, Error>, expected: Vec<TokenLine>) {
-    match actual
-    {
-        Ok(tokens) =>
-        {
-            if tokens.len() != expected.len()
-            {
+    match actual {
+        Ok(tokens) => {
+            if tokens.len() != expected.len() {
                 panic!(
                     "Expected and actual have differing lengths ({} and {})",
                     expected.len(),
@@ -29,8 +25,7 @@ fn compare_linewise(actual: Result<Vec<TokenLine>, Error>, expected: Vec<TokenLi
 
             let it = tokens.iter().zip(expected.iter());
 
-            for (_, (act, exp)) in it.enumerate()
-            {
+            for (_, (act, exp)) in it.enumerate() {
                 assert_eq!(act, exp);
             }
         }

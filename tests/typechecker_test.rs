@@ -37,8 +37,7 @@ fn simple_number() {
         generic_data: Type::Integer,
     };
     let result = typechecker::get_type(program);
-    let actual = match result
-    {
+    let actual = match result {
         Err(e) => panic!("Typechecker returned an error: {:?}", e),
         Ok(t) => t,
     };
@@ -85,8 +84,7 @@ fn simple_string() {
     };
 
     let result = typechecker::get_type(program);
-    let actual = match result
-    {
+    let actual = match result {
         Err(e) => panic!("Typechecker returned an error: {:?}", e),
         Ok(t) => t,
     };
@@ -158,8 +156,7 @@ fn addition_of_integers() {
         generic_data: Type::Integer,
     };
     let result = typechecker::get_type(program);
-    let actual = match result
-    {
+    let actual = match result {
         Err(e) => panic!("Typechecker returned an error: {:?}", e),
         Ok(t) => t,
     };
@@ -203,10 +200,8 @@ fn type_error_in_addition() {
     };
 
     let result = typechecker::get_type(program);
-    match result
-    {
-        Err(e) => match e
-        {
+    match result {
+        Err(e) => match e {
             Error::TypeError {
                 message,
                 expected,
@@ -214,8 +209,7 @@ fn type_error_in_addition() {
                 row,
                 col_start,
                 col_end,
-            } =>
-            {
+            } => {
                 //assert_eq!(message, "Cannot add types Integer and String");
                 assert_eq!(expected, Type::Integer);
                 assert_eq!(found, Type::String);
