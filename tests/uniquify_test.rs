@@ -155,7 +155,7 @@ fn test_function() {
 
     let expected_output = (vec![BaseExpr {
             data: VariableAssignment {
-                var_name: "a0".to_string(),
+                var_name: "a1".to_string(),
                 expr: RecExpr {
                     data: Number {
                         number: 5,
@@ -179,7 +179,7 @@ fn test_function() {
                         args: vec![
                             RecExpr {
                                 data: Variable {
-                                    name: "a0".to_string(),
+                                    name: "a1".to_string(),
                                 },
                                 row: 3,
                                 col_start: 2,
@@ -202,7 +202,7 @@ fn test_function() {
     vec![FunctionType {
             name: "f".to_string(),
             param_names: vec![
-                "a1".to_string(),
+                "a0".to_string(),
             ],
             param_types: vec![
                 Integer,
@@ -216,7 +216,7 @@ fn test_function() {
                                 data: Add {
                                     left: Box::new(RecExpr {
                                         data: Variable {
-                                            name: "a1".to_string(),
+                                            name: "a0".to_string(),
                                         },
                                         row: 2,
                                         col_start: 11,

@@ -1,4 +1,5 @@
 a = 5
+b = a
 fun f(a)
     return a + 2
 f(a)
