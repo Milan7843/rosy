@@ -7,65 +7,67 @@ use crate::tokenizer::TokenLine;
 use std::f32::consts::{E, PI};
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct BaseExpr {
-    pub data: BaseExprData,
+pub struct BaseExpr<T: Clone> {
+    pub data: BaseExprData<T>,
     pub row: usize,
     pub col_start: usize,
     pub col_end: usize,
+    pub generic_data: T,
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum BaseExprData {
+pub enum BaseExprData<T: Clone> {
     Simple {
-        expr: RecExpr,
+        expr: RecExpr<T>,
     },
     VariableAssignment {
         var_name: String,
-        expr: RecExpr,
+        expr: RecExpr<T>,
     },
     PlusEqualsStatement {
         var_name: String,
-        expr: RecExpr,
+        expr: RecExpr<T>,
     },
     IfStatement {
-        condition: RecExpr,
-        body: Vec<BaseExpr>,
-        else_statement: Option<Box<BaseExpr>>,
+        condition: RecExpr<T>,
+        body: Vec<BaseExpr<T>>,
+        else_statement: Option<Box<BaseExpr<T>>>,
     },
     ElseIfStatement {
-        condition: RecExpr,
-        body: Vec<BaseExpr>,
-        else_statement: Option<Box<BaseExpr>>,
+        condition: RecExpr<T>,
+        body: Vec<BaseExpr<T>>,
+        else_statement: Option<Box<BaseExpr<T>>>,
     },
     ElseStatement {
-        body: Vec<BaseExpr>,
+        body: Vec<BaseExpr<T>>,
     },
     ForLoop {
         var_name: String,
-        until: RecExpr,
-        body: Vec<BaseExpr>,
+        until: RecExpr<T>,
+        body: Vec<BaseExpr<T>>,
     },
     FunctionDefinition {
         fun_name: String,
         args: Vec<String>,
-        body: Vec<BaseExpr>,
+        body: Vec<BaseExpr<T>>,
     },
     Return {
-        return_value: Option<RecExpr>,
+        return_value: Option<RecExpr<T>>,
     },
     Break,
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct RecExpr {
-    pub data: RecExprData,
+pub struct RecExpr<T: Clone> {
+    pub data: RecExprData<T>,
     pub row: usize,
     pub col_start: usize,
     pub col_end: usize,
+    pub generic_data: T,
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum RecExprData {
+pub enum RecExprData<T: Clone> {
     Variable {
         name: String,
     },
@@ -80,65 +82,65 @@ pub enum RecExprData {
     },
     Assign {
         variable_name: String,
-        right: Box<RecExpr>,
+        right: Box<RecExpr<T>>,
     },
     Add {
-        left: Box<RecExpr>,
-        right: Box<RecExpr>,
+        left: Box<RecExpr<T>>,
+        right: Box<RecExpr<T>>,
     },
     Subtract {
-        left: Box<RecExpr>,
-        right: Box<RecExpr>,
+        left: Box<RecExpr<T>>,
+        right: Box<RecExpr<T>>,
     },
     Multiply {
-        left: Box<RecExpr>,
-        right: Box<RecExpr>,
+        left: Box<RecExpr<T>>,
+        right: Box<RecExpr<T>>,
     },
     Divide {
-        left: Box<RecExpr>,
-        right: Box<RecExpr>,
+        left: Box<RecExpr<T>>,
+        right: Box<RecExpr<T>>,
     },
     Power {
-        left: Box<RecExpr>,
-        right: Box<RecExpr>,
+        left: Box<RecExpr<T>>,
+        right: Box<RecExpr<T>>,
     },
     Minus {
-        right: Box<RecExpr>,
+        right: Box<RecExpr<T>>,
     },
     Or {
-        left: Box<RecExpr>,
-        right: Box<RecExpr>,
+        left: Box<RecExpr<T>>,
+        right: Box<RecExpr<T>>,
     },
     And {
-        left: Box<RecExpr>,
-        right: Box<RecExpr>,
+        left: Box<RecExpr<T>>,
+        right: Box<RecExpr<T>>,
     },
     Not {
-        right: Box<RecExpr>,
+        right: Box<RecExpr<T>>,
     },
     Equals {
-        left: Box<RecExpr>,
-        right: Box<RecExpr>,
+        left: Box<RecExpr<T>>,
+        right: Box<RecExpr<T>>,
     },
     NotEquals {
-        left: Box<RecExpr>,
-        right: Box<RecExpr>,
+        left: Box<RecExpr<T>>,
+        right: Box<RecExpr<T>>,
     },
     GreaterThan {
-        left: Box<RecExpr>,
-        right: Box<RecExpr>,
+        left: Box<RecExpr<T>>,
+        right: Box<RecExpr<T>>,
     },
     LessThan {
-        left: Box<RecExpr>,
-        right: Box<RecExpr>,
+        left: Box<RecExpr<T>>,
+        right: Box<RecExpr<T>>,
     },
     GreaterThanOrEqual {
-        left: Box<RecExpr>,
-        right: Box<RecExpr>,
+        left: Box<RecExpr<T>>,
+        right: Box<RecExpr<T>>,
     },
     LessThanOrEqual {
-        left: Box<RecExpr>,
-        right: Box<RecExpr>,
+        left: Box<RecExpr<T>>,
+        right: Box<RecExpr<T>>,
     },
     Access {
         object: String,
@@ -146,14 +148,14 @@ pub enum RecExprData {
     },
     FunctionCall {
         function_name: String,
-        args: Vec<RecExpr>,
+        args: Vec<RecExpr<T>>,
     },
     List {
-        elements: Vec<RecExpr>,
+        elements: Vec<RecExpr<T>>,
     },
     ListAccess {
         variable: String,
-        index: Box<RecExpr>,
+        index: Box<RecExpr<T>>,
     },
 }
 
@@ -202,7 +204,7 @@ enum GenExprData {
     },
 }
 
-pub fn parse(path: &std::path::PathBuf) -> Result<Vec<BaseExpr>, Error> {
+pub fn parse(path: &std::path::PathBuf) -> Result<Vec<BaseExpr<()>>, Error> {
     // Read the file into a big string
     let content = std::fs::read_to_string(path).expect("could not read file");
 
@@ -213,7 +215,7 @@ pub fn parse(path: &std::path::PathBuf) -> Result<Vec<BaseExpr>, Error> {
     return parse_strings(lines);
 }
 
-pub fn parse_strings(lines: Vec<&str>) -> Result<Vec<BaseExpr>, Error> {
+pub fn parse_strings(lines: Vec<&str>) -> Result<Vec<BaseExpr<()>>, Error> {
     // First: tokenize the lines
     let token_lines = match tokenizer::tokenize(lines) {
         Ok(token_lines) => token_lines,
@@ -341,7 +343,7 @@ fn get_last_occurence(
     });
 }
 
-fn get_expression(tokens: &[Token]) -> Result<RecExpr, Error> {
+fn get_expression(tokens: &[Token]) -> Result<RecExpr<()>, Error> {
     // First we get the generic expressions
     match get_generic_expression(tokens) {
         // And then convert the generic expression to a recursive expression
@@ -353,21 +355,21 @@ fn get_expression(tokens: &[Token]) -> Result<RecExpr, Error> {
     }
 }
 
-fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecExpr, Error> {
+fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecExpr<()>, Error> {
     let data = match gen_expr.data {
-        GenExprData::Variable { name } => RecExprData::Variable { name },
-        GenExprData::Number { number } => RecExprData::Number { number },
-        GenExprData::String { value } => RecExprData::String { value },
-        GenExprData::Boolean { value } => RecExprData::Boolean { value },
+        GenExprData::Variable { name } => RecExprData::<()>::Variable { name },
+        GenExprData::Number { number } => RecExprData::<()>::Number { number },
+        GenExprData::String { value } => RecExprData::<()>::String { value },
+        GenExprData::Boolean { value } => RecExprData::<()>::Boolean { value },
         GenExprData::UnaryOp { operator, operand } => match operator {
             SymbolType::Minus => match generic_expression_to_recursive_expression(*operand) {
-                Ok(operand_expr) => RecExprData::Minus {
+                Ok(operand_expr) => RecExprData::<()>::Minus {
                     right: Box::new(operand_expr),
                 },
                 Err(e) => return Err(e),
             },
             SymbolType::Not => match generic_expression_to_recursive_expression(*operand) {
-                Ok(operand_expr) => RecExprData::Not {
+                Ok(operand_expr) => RecExprData::<()>::Not {
                     right: Box::new(operand_expr),
                 },
                 Err(e) => return Err(e),
@@ -394,7 +396,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => RecExprData::Add {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::Add {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
                     },
@@ -407,7 +409,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => RecExprData::Subtract {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::Subtract {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
                     },
@@ -420,7 +422,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => RecExprData::Multiply {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::Multiply {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
                     },
@@ -433,7 +435,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => RecExprData::Divide {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::Divide {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
                     },
@@ -446,7 +448,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => RecExprData::Power {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::Power {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
                     },
@@ -459,7 +461,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => RecExprData::Or {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::Or {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
                     },
@@ -472,7 +474,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => RecExprData::And {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::And {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
                     },
@@ -485,7 +487,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => RecExprData::Equals {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::Equals {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
                     },
@@ -498,7 +500,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => RecExprData::NotEquals {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::NotEquals {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
                     },
@@ -511,7 +513,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => RecExprData::GreaterThan {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::GreaterThan {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
                     },
@@ -524,7 +526,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => RecExprData::GreaterThanOrEqual {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::GreaterThanOrEqual {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
                     },
@@ -537,7 +539,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => RecExprData::LessThan {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::LessThan {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
                     },
@@ -550,7 +552,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                     generic_expression_to_recursive_expression(*left_operand),
                     generic_expression_to_recursive_expression(*right_operand),
                 ) {
-                    (Ok(left_expr), Ok(right_expr)) => RecExprData::LessThanOrEqual {
+                    (Ok(left_expr), Ok(right_expr)) => RecExprData::<()>::LessThanOrEqual {
                         left: Box::new(left_expr),
                         right: Box::new(right_expr),
                     },
@@ -583,7 +585,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                 }
             }
 
-            RecExprData::FunctionCall {
+            RecExprData::<()>::FunctionCall {
                 function_name,
                 args: rec_expr_arguments,
             }
@@ -597,13 +599,13 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
                 }
             }
 
-            RecExprData::List {
+            RecExprData::<()>::List {
                 elements: rec_expr_elements,
             }
         }
         GenExprData::ListAccess { variable, index } => {
             match generic_expression_to_recursive_expression(*index) {
-                Ok(rec_expr_index) => RecExprData::ListAccess {
+                Ok(rec_expr_index) => RecExprData::<()>::ListAccess {
                     variable,
                     index: Box::new(rec_expr_index),
                 },
@@ -617,6 +619,7 @@ fn generic_expression_to_recursive_expression(gen_expr: GenExpr) -> Result<RecEx
         row: gen_expr.row,
         col_start: gen_expr.col_start,
         col_end: gen_expr.col_end,
+        generic_data: (),
     });
 }
 
@@ -1364,8 +1367,8 @@ fn read_list_item(line: &[Token]) -> Result<(Option<GenExpr>, &[Token]), Error> 
 }
 
 fn add_to_if_statement(
-    if_statement: &mut BaseExpr,
-    else_statement_to_add: BaseExpr,
+    if_statement: &mut BaseExpr<()>,
+    else_statement_to_add: BaseExpr<()>,
 ) -> Result<String, Error> {
     match &mut if_statement.data {
         BaseExprData::IfStatement { else_statement, .. }
@@ -1389,7 +1392,7 @@ fn add_to_if_statement(
     }
 }
 
-fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>, Error> {
+fn merge_if_statements(base_expressions: Vec<BaseExpr<()>>) -> Result<Vec<BaseExpr<()>>, Error> {
     let mut merged_statements = Vec::new();
 
     // This can probably be done without copying every single item...
@@ -1416,6 +1419,7 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
                     row: base_expression.row,
                     col_start: base_expression.col_start,
                     col_end: base_expression.col_end,
+                    generic_data: base_expression.generic_data,
                 });
             }
             BaseExprData::ElseIfStatement {
@@ -1445,6 +1449,7 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
                                 row: base_expression.row,
                                 col_start: base_expression.col_start,
                                 col_end: base_expression.col_end,
+                                generic_data: base_expression.generic_data,
                             },
                         ) {
                             Ok(_) => {}
@@ -1484,6 +1489,7 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
                                 row: base_expression.row,
                                 col_start: base_expression.col_start,
                                 col_end: base_expression.col_end,
+                                generic_data: base_expression.generic_data,
                             },
                         ) {
                             Ok(_) => {}
@@ -1522,6 +1528,7 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
                     row: base_expression.row,
                     col_start: base_expression.col_start,
                     col_end: base_expression.col_end,
+                    generic_data: base_expression.generic_data,
                 });
             }
             BaseExprData::FunctionDefinition {
@@ -1544,6 +1551,7 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
                     row: base_expression.row,
                     col_start: base_expression.col_start,
                     col_end: base_expression.col_end,
+                    generic_data: base_expression.generic_data,
                 });
             }
             other => {
@@ -1558,7 +1566,7 @@ fn merge_if_statements(base_expressions: Vec<BaseExpr>) -> Result<Vec<BaseExpr>,
     return Ok(merged_statements);
 }
 
-fn get_base_expressions(token_lines: &Vec<TokenLine>) -> Result<Vec<BaseExpr>, Error> {
+fn get_base_expressions(token_lines: &Vec<TokenLine>) -> Result<Vec<BaseExpr<()>>, Error> {
     let mut line_iterator = token_lines.iter().peekable();
 
     return get_base_expressions_with_indentation(&mut line_iterator, 0);
@@ -1567,7 +1575,7 @@ fn get_base_expressions(token_lines: &Vec<TokenLine>) -> Result<Vec<BaseExpr>, E
 fn get_base_expressions_with_indentation(
     token_lines_iter: &mut std::iter::Peekable<std::slice::Iter<'_, TokenLine>>,
     indentation: usize,
-) -> Result<Vec<BaseExpr>, Error> {
+) -> Result<Vec<BaseExpr<()>>, Error> {
     let mut expressions = Vec::new();
 
     while let Some(token_line) = token_lines_iter.peek() {
@@ -1587,7 +1595,7 @@ fn get_base_expressions_with_indentation(
 
 fn get_base_expression(
     token_lines_iter: &mut std::iter::Peekable<std::slice::Iter<'_, TokenLine>>,
-) -> Result<BaseExpr, Error> {
+) -> Result<BaseExpr<()>, Error> {
     let Some(token_line) = token_lines_iter.next() else {
         return Err(Error::SimpleError {
             message: format!("No more lines found"),
@@ -1605,7 +1613,7 @@ fn get_base_expression(
         }
     };
 
-    let data: BaseExprData = match &tokens[..] {
+    let data: BaseExprData<()> = match &tokens[..] {
         [Token {
             data: TokenData::Variable { name },
             ..
@@ -1885,6 +1893,7 @@ fn get_base_expression(
         row,
         col_start,
         col_end,
+        generic_data: (),
     });
 }
 
@@ -1972,7 +1981,7 @@ fn find_next_bracket(tokens: &[Token]) -> i32 {
 }
 */
 
-pub fn print_expressions(expressions: &Vec<BaseExpr>) {
+pub fn print_expressions(expressions: &Vec<BaseExpr<()>>) {
     for expression in expressions {
         print_expression(expression, 0);
         print!("\n");
@@ -1985,7 +1994,7 @@ fn print_indentation(indentation: i32) {
     }
 }
 
-fn print_expression(expression: &BaseExpr, indentation: i32) {
+fn print_expression(expression: &BaseExpr<()>, indentation: i32) {
     print_indentation(indentation);
     match &expression.data {
         BaseExprData::Simple { expr } => print_recursive_expression(expr),
@@ -2068,7 +2077,7 @@ fn print_expression(expression: &BaseExpr, indentation: i32) {
     }
 }
 
-fn print_recursive_expression(expression: &RecExpr) {
+fn print_recursive_expression(expression: &RecExpr<()>) {
     match &expression.data {
         RecExprData::Variable { name } => print!("Var({name:?})"),
         RecExprData::Number { number } => print!("Num({number})"),

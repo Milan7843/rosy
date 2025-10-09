@@ -54,17 +54,48 @@ Default functions:
 */
 
 // Search for a pattern in a file and display the lines that contain it.
+#[derive(clap::Subcommand)]
+enum Command {
+    /// Run the source file
+    Run {
+        /// The path to the file to read
+        path: std::path::PathBuf,
+    },
+    /// Compile the source file to an executable
+    Compile { path: std::path::PathBuf },
+    /// Typecheck the source file
+    Typecheck { path: std::path::PathBuf },
+    /// Debug the source file
+    Debug { path: std::path::PathBuf },
+}
+
 #[derive(Parser)]
 struct Cli {
-    // The path to the file to read
-    path: std::path::PathBuf,
+    /// The path to the file to read
+    #[clap(subcommand)]
+    command: Command,
 }
 
 pub fn main() {
     let args = Cli::parse();
 
-    match pipeline::run_pipeline_from_path(&args.path) {
-        Ok(terminal) => {}
-        Err(err) => println!("{err}"),
+    match args.command {
+        Command::Run { path } => match pipeline::run_pipeline_from_path(&path) {
+            Ok(_) => {}
+            Err(err) => println!("{err}"),
+        },
+        Command::Compile { path } => {
+            match pipeline::run_compilation_pipeline_from_path(&path) {
+                Ok(_) => {}
+                Err(err) => println!("{err}"),
+            }
+            //exewriter::write_exe_file(&path.with_extension("exe")).unwrap();
+            //println!("Compiled to {}", path.with_extension("exe").display());
+        }
+        Command::Typecheck { path } => match pipeline::run_typecheck_pipeline_from_path(&path) {
+            Ok(_) => println!("Typecheck passed"),
+            Err(err) => println!("Typecheck error: {err}"),
+        },
+        Command::Debug { path: _ } => {}
     }
 }

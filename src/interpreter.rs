@@ -35,7 +35,7 @@ enum Value {
     Function {
         name: String,
         args: Vec<String>,
-        body: Vec<BaseExpr>,
+        body: Vec<BaseExpr<()>>,
     },
     StandardFunction(StandardFunction),
     List(Vec<Value>),
@@ -90,7 +90,7 @@ enum InterpretationResult {
     Empty,
 }
 
-pub fn interpret(base_expressions: Vec<BaseExpr>) -> Result<Terminal, Error> {
+pub fn interpret(base_expressions: Vec<BaseExpr<()>>) -> Result<Terminal, Error> {
     let mut env: Environment = Vec::new();
 
     env.push(Vec::new());
@@ -112,7 +112,7 @@ pub fn interpret(base_expressions: Vec<BaseExpr>) -> Result<Terminal, Error> {
 }
 
 fn interpret_base_expr(
-    base_expression: &BaseExpr,
+    base_expression: &BaseExpr<()>,
     env: &mut Environment,
     terminal: &mut Terminal,
 ) -> Result<InterpretationResult, Error> {
@@ -445,10 +445,10 @@ fn interpret_base_expr(
             let col_end = until_expr.col_end;
 
             let values = match interpret_expr(until_expr, env, terminal) {
-                Ok(Some(Value::Number(until))) => (0..until).map(|i| Value::Number(i)).into_iter().collect(),
-                Ok(Some(Value::List(values))) => {
-                    values
+                Ok(Some(Value::Number(until))) => {
+                    (0..until).map(|i| Value::Number(i)).into_iter().collect()
                 }
+                Ok(Some(Value::List(values))) => values,
                 Ok(Some(other_value)) => {
                     return Err(Error::LocationError {
                         message: format!(
@@ -566,7 +566,7 @@ fn add(
 }
 
 fn interpret_expr(
-    expr: &RecExpr,
+    expr: &RecExpr<()>,
     env: &mut Environment,
     terminal: &mut Terminal,
 ) -> Result<Option<Value>, Error> {
@@ -1342,7 +1342,9 @@ fn interpret_expr(
                     let len = list.len();
                     if index >= len {
                         return Err(Error::LocationError {
-                            message: format!("Index {index} out of bounds for list of length {len}"),
+                            message: format!(
+                                "Index {index} out of bounds for list of length {len}"
+                            ),
                             row: expr.row,
                             col_start: expr.col_start,
                             col_end: expr.col_end,
