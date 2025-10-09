@@ -18,6 +18,7 @@ pub enum TacInstruction {
     Goto(String),
     If(TacValue, String),
     Label(String),
+    FunctionLabel(String, Vec<String>), // Function entry point label with name and parameter names
     Call(String, Vec<TacValue>, Option<String>),
     Return(Option<TacValue>),
 }
@@ -111,7 +112,7 @@ fn add_functions(
         });
 
         // Now we can generate TAC for the function body
-        instructions.push(TacInstruction::Label(label));
+        instructions.push(TacInstruction::FunctionLabel(label, function.param_names.clone()));
 
         for expr in function.content {
             generate_tac_for_base_expr(
@@ -690,6 +691,9 @@ fn print_instruction(instr: &TacInstruction) {
         }
         TacInstruction::Label(label) => {
             println!("{}:", label);
+        }
+        TacInstruction::FunctionLabel(name, params) => {
+            println!("function {}({})", name, params.join(", "));
         }
         TacInstruction::Call(func, args, ret) => {
             if let Some(ret_var) = ret {

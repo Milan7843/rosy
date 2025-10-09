@@ -7,6 +7,7 @@ use crate::tokenizer;
 use crate::tokenizer::Error;
 use crate::typechecker;
 use crate::uniquify;
+use crate::livenessanalysis;
 
 pub fn run_typecheck_pipeline_from_path(path: &std::path::PathBuf) -> Result<String, String> {
     // Read the file into a big string

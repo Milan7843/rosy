@@ -1,5 +1,6 @@
 a = 5
 b = a
 fun f(a)
-    return a + 2
+    b = 2 + 3
+    return a + 2 + b
 f(a)

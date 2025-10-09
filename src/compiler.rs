@@ -15,11 +15,16 @@ use crate::tokenizer::Error;
 use crate::typechecker;
 use crate::typechecker::FunctionType;
 use crate::typechecker::Type;
+use crate::livenessanalysis;
 
 pub fn compile(
     base_expressions: (Vec<BaseExpr<Type>>, Vec<FunctionType>),
 ) -> Result<Vec<Instruction>, Error> {
     let tac_instructions = tac::generate_tac(base_expressions.0, base_expressions.1)?;
+
+    let liveness = livenessanalysis::analyze_liveness(&tac_instructions);
+
+    livenessanalysis::print_code_with_liveness(&tac_instructions, &liveness);
 
     let mut instructions = Vec::new();
 
