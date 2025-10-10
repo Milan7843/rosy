@@ -1,32 +1,22 @@
 use std::fmt::format;
 
-use crate::assembler;
-use crate::assembler::Argument;
 use crate::assembler::Instruction;
-use crate::assembler::Register;
-use crate::assembler::RegisterType;
-use crate::parser;
 use crate::parser::BaseExpr;
-use crate::parser::BaseExprData;
-use crate::parser::RecExpr;
-use crate::parser::RecExprData;
 use crate::tac;
 use crate::tokenizer::Error;
-use crate::typechecker;
 use crate::typechecker::FunctionType;
 use crate::typechecker::Type;
-use crate::livenessanalysis;
+use crate::registerallocation::registerallocator;
+use crate::codegenerator;
 
 pub fn compile(
     base_expressions: (Vec<BaseExpr<Type>>, Vec<FunctionType>),
 ) -> Result<Vec<Instruction>, Error> {
     let tac_instructions = tac::generate_tac(base_expressions.0, base_expressions.1)?;
 
-    let liveness = livenessanalysis::analyze_liveness(&tac_instructions);
+    let register_allocation = registerallocator::allocate_registers(&tac_instructions);
 
-    livenessanalysis::print_code_with_liveness(&tac_instructions, &liveness);
-
-    let mut instructions = Vec::new();
+    let instructions = codegenerator::generate_code(tac_instructions, register_allocation)?;
 
     return Ok(instructions);
 }

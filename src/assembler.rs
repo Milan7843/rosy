@@ -1,59 +1,4 @@
-#[derive(PartialEq, Debug, Clone)]
-pub enum RegisterType {
-    RAX,
-    RBX,
-    RCX,
-    RDX,
-    RSI,
-    RDI,
-    RSP,
-    RBP,
-}
-
-#[derive(PartialEq, Debug, Clone)]
-pub enum Register {
-    General(RegisterType),
-    Extended(u8),
-}
-
-#[derive(PartialEq, Debug, Clone)]
-pub enum Argument {
-    Register(Register),
-    Immediate(u64),
-    Label(String),
-    MemoryAddress(u64), // e.g., [rax], [rbx + 4]
-}
-
-#[derive(PartialEq, Debug, Clone)]
-pub enum Instruction {
-    Mov(Argument, Argument), // dest, src
-    Add(Argument, Argument), // dest, src
-    Sub(Argument, Argument), // dest, src
-    Mul(Argument, Argument), // dest, src
-    Div(Argument, Argument), // dest, src
-    Cmp(Argument, Argument), // op1, op2
-    Jmp(Argument),           // label
-    Je(Argument),            // label
-    Jne(Argument),           // label
-    Jg(Argument),            // label
-    Jge(Argument),           // label
-    Jl(Argument),            // label
-    Jle(Argument),           // label
-    Call(Argument),          // label or function name
-    Ret,
-    Push(Argument), // value or register
-    Pop(Argument),  // register
-    Label(String),  // label name
-    Syscall(u32),   // syscall number
-    Nop,
-}
-
-fn get_register_is_extended(reg: &Register) -> bool {
-    match reg {
-        Register::General(_) => false,
-        Register::Extended(_) => true,
-    }
-}
+use crate::codegenerator::*;
 
 fn get_rex_byte(w: bool, r: bool, x: bool, b: bool) -> u8 {
     0x40 | ((w as u8) << 3) | ((r as u8) << 2) | ((x as u8) << 1) | (b as u8)
@@ -80,6 +25,13 @@ fn get_rm(reg: Register) -> u8 {
                 panic!("Register number out of range for R/M field");
             }
         }
+    }
+}
+
+fn get_register_is_extended(reg: &Register) -> bool {
+    match reg {
+        Register::General(_) => false,
+        Register::Extended(_) => true,
     }
 }
 

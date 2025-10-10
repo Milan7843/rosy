@@ -12,3 +12,4 @@ pub mod tac;
 pub mod tokenizer;
 pub mod typechecker;
 pub mod uniquify;
+pub mod registerallocation;

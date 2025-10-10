@@ -1,6 +1,11 @@
-a = 5
-b = a
+a = 1
+b = 2
+c = 3
+d = 4
+e = 5
+f = 6
+g = 7
+h = a + b + c + d + e + f + g
 fun f(a)
-    b = 2 + 3
-    return a + 2 + b
-f(a)
+    return a
+f(h)
