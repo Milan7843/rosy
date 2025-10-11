@@ -61,14 +61,19 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Strin
                     _ => {}
                 }
             }
-            TacInstruction::If(cond, label) => {
-                match cond {
+            TacInstruction::CompareAndGoto(left, right, _, _) => {
+                match left {
                     TacValue::Variable(var) => {
                         liveness_before.insert(var.clone());
                     }
                     _ => {}
                 }
-                // Note: The label itself does not affect liveness
+                match right {
+                    TacValue::Variable(var) => {
+                        liveness_before.insert(var.clone());
+                    }
+                    _ => {}
+                }
             }
             TacInstruction::Goto(label) => {
                 // Note: The label itself does not affect liveness

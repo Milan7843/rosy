@@ -111,7 +111,6 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
     //print!("Typed program:\n{:#?}\n", typed_program);
 
     // Perform uniquification
-    uniquify::uniquify(&mut typed_program);
 
     //print!("Uniquified program:\n{:#?}\n", typed_program);
 

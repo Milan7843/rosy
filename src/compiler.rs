@@ -1,6 +1,6 @@
 use std::fmt::format;
 
-use crate::assembler::Instruction;
+use crate::codegenerator::Instruction;
 use crate::parser::BaseExpr;
 use crate::tac;
 use crate::tokenizer::Error;
@@ -8,15 +8,29 @@ use crate::typechecker::FunctionType;
 use crate::typechecker::Type;
 use crate::registerallocation::registerallocator;
 use crate::codegenerator;
+use crate::livenessanalysis;
+use crate::uniquify;
+use crate::registerallocation::interferencegraph;
+use crate::variablecollector;
 
 pub fn compile(
-    base_expressions: (Vec<BaseExpr<Type>>, Vec<FunctionType>),
+    mut base_expressions: (Vec<BaseExpr<Type>>, Vec<FunctionType>),
 ) -> Result<Vec<Instruction>, Error> {
     let tac_instructions = tac::generate_tac(base_expressions.0, base_expressions.1)?;
 
-    let register_allocation = registerallocator::allocate_registers(&tac_instructions);
+    let all_variable_names = variablecollector::collect_variable_names(&tac_instructions);
 
-    let instructions = codegenerator::generate_code(tac_instructions, register_allocation)?;
+    let liveness = livenessanalysis::analyze_liveness(&tac_instructions);
+
+    livenessanalysis::print_code_with_liveness(&tac_instructions, &liveness);
+
+	let interference_graph = interferencegraph::build_interference_graph(&tac_instructions, &liveness, &all_variable_names);
+
+    let register_allocation = registerallocator::allocate_registers(&interference_graph);
+
+    let instructions = codegenerator::generate_code(&tac_instructions, &register_allocation, &liveness)?;
+
+    codegenerator::print_instructions(&instructions);
 
     return Ok(instructions);
 }

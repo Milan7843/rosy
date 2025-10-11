@@ -13,3 +13,4 @@ pub mod tokenizer;
 pub mod typechecker;
 pub mod uniquify;
 pub mod registerallocation;
+pub mod variablecollector;

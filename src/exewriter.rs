@@ -4,10 +4,10 @@ use std::hint;
 use std::io::prelude::*;
 
 use crate::assembler;
-use crate::assembler::Argument;
-use crate::assembler::Instruction;
-use crate::assembler::Register;
-use crate::assembler::RegisterType;
+use crate::codegenerator::Argument;
+use crate::codegenerator::Instruction;
+use crate::codegenerator::Register;
+use crate::codegenerator::RegisterType;
 use crate::compiler;
 
 pub fn write_exe_file(path: &std::path::PathBuf) -> std::io::Result<()> {

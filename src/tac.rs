@@ -16,7 +16,7 @@ pub enum TacInstruction {
     BinOp(String, TacValue, BinOp, TacValue),
     UnaryOp(String, UnOp, TacValue),
     Goto(String),
-    If(TacValue, String),
+    CompareAndGoto(TacValue, TacValue, ComparisonOp, String),
     Label(String),
     FunctionLabel(String, Vec<String>), // Function entry point label with name and parameter names
     Call(String, Vec<TacValue>, Option<String>),
@@ -45,6 +45,16 @@ pub enum UnOp {
     Not,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum ComparisonOp {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
 #[derive(Debug, Clone)]
 pub enum TacValue {
     Constant(i32),
@@ -64,10 +74,12 @@ struct TacFunctionEnvironment {
     functions: Vec<TacFunction>,
 }
 
+// TODO remove
 struct TacVariableScope {
     variables: HashMap<String, String>,
 }
 
+// TODO remove
 struct TacVariableEnvironment {
     scopes: Vec<TacVariableScope>,
 }
@@ -203,6 +215,15 @@ fn generate_tac_for_base_expr(
     variable_env: &mut TacVariableEnvironment,
 ) -> Result<(), Error> {
     match &expr.data {
+        BaseExprData::Simple { expr } => {
+            generate_tac_for_rec_expr(
+                expr,
+                instructions,
+                temp_counter,
+                function_env,
+                variable_env,
+            )?;
+        }
         BaseExprData::VariableAssignment { var_name, expr } => {
             let value = generate_tac_for_rec_expr(
                 expr,
@@ -240,14 +261,10 @@ fn generate_tac_for_base_expr(
             )?;
             let cond_temp = format!("t{}", temp_counter);
             *temp_counter += 1;
-            instructions.push(TacInstruction::BinOp(
-                cond_temp.clone(),
+            instructions.push(TacInstruction::CompareAndGoto(
                 TacValue::Variable(var_name.clone()),
-                BinOp::Lt,
                 until_value,
-            ));
-            instructions.push(TacInstruction::If(
-                TacValue::Variable(cond_temp),
+                ComparisonOp::Ge,
                 end_label.clone(),
             ));
             // Loop body
@@ -313,7 +330,12 @@ fn generate_tac_for_base_expr(
             )?;
 
             // Jump to the next statement (either end of if-sequence or else branch) if condition is false
-            instructions.push(TacInstruction::If(cond_value, next_label.clone()));
+            instructions.push(TacInstruction::CompareAndGoto(
+                cond_value,
+                TacValue::Constant(0),
+                ComparisonOp::Eq,
+                next_label.clone(),
+            ));
 
             // If body
             for body_expr in body {
@@ -368,7 +390,12 @@ fn generate_tac_for_base_expr(
             )?;
 
             // Jump to the next statement (either end of if-sequence or else branch) if condition is false
-            instructions.push(TacInstruction::If(cond_value, next_label.clone()));
+            instructions.push(TacInstruction::CompareAndGoto(
+                cond_value,
+                TacValue::Constant(0),
+                ComparisonOp::Eq,
+                next_label.clone(),
+            ));
 
             // If body
             for body_expr in body {
@@ -686,8 +713,16 @@ fn print_instruction(instr: &TacInstruction) {
         TacInstruction::Goto(label) => {
             println!("goto {}", label);
         }
-        TacInstruction::If(cond, label) => {
-            println!("if not {:?} goto {}", cond, label);
+        TacInstruction::CompareAndGoto(left, right, comparison, label) => {
+            let comp_str = match comparison {
+                ComparisonOp::Eq => "==",
+                ComparisonOp::Ne => "!=",
+                ComparisonOp::Lt => "<",
+                ComparisonOp::Le => "<=",
+                ComparisonOp::Gt => ">",
+                ComparisonOp::Ge => ">=",
+            };
+            println!("if {:?} {} {:?} goto {}", left, comp_str, right, label);
         }
         TacInstruction::Label(label) => {
             println!("{}:", label);
