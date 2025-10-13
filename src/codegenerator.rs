@@ -66,7 +66,7 @@ fn is_caller_saved(register: &Register) -> bool {
 #[derive(PartialEq, Debug, Clone)]
 pub enum Argument {
     Register(Register),
-    Immediate(u64),
+    Immediate(i64),
     Label(String),
     MemoryAddress(u64), // e.g., [rax], [rbx + 4]
 }
@@ -94,7 +94,7 @@ pub enum Instruction {
     Push(Argument), // value or register
     Pop(Argument),  // register
     Label(String),  // label name
-    Syscall(u32),   // syscall number
+    Syscall(String), // name of the syscall function (used for IAT)
     Nop,
 }
 
@@ -116,13 +116,12 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
             }
             TacInstruction::FunctionLabel(name, params) => {
                 instructions.push(Instruction::Label(name.clone()));
-                // Function parameters are assumed to be in the correct registers
             }
             TacInstruction::Assign(dest, value) => {
                 let dest_reg = get_register(dest, register_allocation)?;
                 match value {
                     TacValue::Constant(imm) => {
-                        instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Immediate(*imm as u64)));
+                        instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Immediate(*imm as i64)));
                     }
                     TacValue::Variable(var) => {
                         let src_reg = get_register(var, register_allocation)?;
@@ -157,17 +156,17 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
                         instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Register(left_reg)));
                         // Perform operation with immediate right operand
                         match op {
-                            BinOp::Add => instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Immediate(*imm_right as u64))),
-                            BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Immediate(*imm_right as u64))),
-                            BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Immediate(*imm_right as u64))),
-                            BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Immediate(*imm_right as u64))),
+                            BinOp::Add => instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+                            BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+                            BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+                            BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
                             _ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
                         };
                     }
                     (TacValue::Constant(imm_left), TacValue::Variable(var_right)) => {
                         let right_reg = get_register(var_right, register_allocation)?;
                         // Move left immediate to dest register
-                        instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Immediate(*imm_left as u64)));
+                        instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Immediate(*imm_left as i64)));
                         // Perform operation with right operand
                         match op {
                             BinOp::Add => instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Register(right_reg))),
@@ -179,13 +178,13 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
                     }
                     (TacValue::Constant(imm_left), TacValue::Constant(imm_right)) => {
                         // Move left immediate to dest register
-                        instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Immediate(*imm_left as u64)));
+                        instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Immediate(*imm_left as i64)));
                         // Perform operation with right immediate
                         match op {
-                            BinOp::Add => instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Immediate(*imm_right as u64))),
-                            BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Immediate(*imm_right as u64))),
-                            BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Immediate(*imm_right as u64))),
-                            BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Immediate(*imm_right as u64))),
+                            BinOp::Add => instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+                            BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+                            BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+                            BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
                             _ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
                         };
                     }
@@ -201,7 +200,7 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
                         instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX)), Argument::Register(ret_reg)));
                     }
                     Some(TacValue::Constant(imm)) => {
-                        instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX)), Argument::Immediate(*imm as u64)));
+                        instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX)), Argument::Immediate(*imm as i64)));
                     }
                     None => {
                         // No return value
@@ -221,7 +220,7 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
                         instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Register(src_reg)));
                     }
                     TacValue::Constant(imm) => {
-                        instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Immediate(*imm as u64)));
+                        instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Immediate(*imm as i64)));
                     }
                     _ => {
                         return Err(Error::SimpleError{message: format!("Unsupported TacValue in UnaryOp: {:?}", operand)});
@@ -250,16 +249,16 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
                     // One register, one immediate
                     (TacValue::Variable(var_left), TacValue::Constant(imm_right)) => {
                         let left_reg = get_register(var_left, register_allocation)?;
-                        instructions.push(Instruction::Cmp(Argument::Register(left_reg), Argument::Immediate(*imm_right as u64)));
+                        instructions.push(Instruction::Cmp(Argument::Register(left_reg), Argument::Immediate(*imm_right as i64)));
                     }
                     // One immediate, one register
                     (TacValue::Constant(imm_left), TacValue::Variable(var_right)) => {
                         // Only reg, imm is supported in x86 cmp, so we need to swap the order and adjust the logic accordingly
                         let right_reg = get_register(var_right, register_allocation)?;
-                        instructions.push(Instruction::Cmp(Argument::Register(right_reg), Argument::Immediate(*imm_left as u64)));
+                        instructions.push(Instruction::Cmp(Argument::Register(right_reg), Argument::Immediate(*imm_left as i64)));
                     }
                     (TacValue::Constant(imm_left), TacValue::Constant(imm_right)) => {
-                        instructions.push(Instruction::Cmp(Argument::Immediate(*imm_left as u64), Argument::Immediate(*imm_right as u64)));
+                        instructions.push(Instruction::Cmp(Argument::Immediate(*imm_left as i64), Argument::Immediate(*imm_right as i64)));
                     }
                     _ => {
                         return Err(Error::SimpleError{message: format!("Unsupported TacValue combination in Compare: {:?}, {:?}", left, right)});
@@ -278,75 +277,109 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
                 instructions.push(Instruction::Jmp(label.clone()));
             }
             TacInstruction::Call(func_name, args, return_var) => {
-                // Check for active caller-saved registers and save them
-                let mut saved_registers = Vec::new();
-                if instruction_index < liveness.len() {
-                    // Check which variables are live at this point
-                    let live_vars = &liveness[instruction_index];
+                generate_code_for_call(&mut instructions, func_name, args, return_var, register_allocation, liveness, instruction_index, false)?;
+            }
+            TacInstruction::SysCall(func_name, args, return_var) => {
+                generate_code_for_call(&mut instructions, func_name, args, return_var, register_allocation, liveness, instruction_index, true)?;
+            }
 
-                    let mut live_registers = HashSet::new();
-                    for var in live_vars {
-                        if let Some(&reg_num) = register_allocation.get(var) {
-                            let reg = to_register(reg_num);
-                            if is_caller_saved(&reg) {
-                                live_registers.insert(reg);
-                            }
-                        }
-                    }
+        }
+    }
+    Ok(instructions)
+}
 
-                    // Push the contents of these registers onto the stack
-                    for reg in live_registers.iter() {
-                        instructions.push(Instruction::Push(Argument::Register(reg.clone())));
-                        saved_registers.push(reg.clone());
-                    }
+fn generate_code_for_call(
+    instructions: &mut Vec<Instruction>,
+    func_name: &String,
+    args: &Vec<TacValue>,
+    return_var: &Option<String>,
+    register_allocation: &HashMap<String, isize>,
+    liveness: &Vec<HashSet<String>>,
+    instruction_index: usize,
+    is_syscall: bool,
+) -> Result<(), Error> {
+    // Check for active caller-saved registers and save them
+    let mut saved_registers = Vec::new();
+    if instruction_index < liveness.len() {
+        // Check which variables are live at this point
+        let live_vars = &liveness[instruction_index];
+
+        let mut live_registers = HashSet::new();
+        for var in live_vars {
+            if let Some(&reg_num) = register_allocation.get(var) {
+                let reg = to_register(reg_num);
+                if is_caller_saved(&reg) {
+                    live_registers.insert(reg);
                 }
+            }
+        }
 
-                // Move arguments into appropriate registers (first 6 integer args in rdi, rsi, rdx, rcx, r8, r9)
-                let arg_registers = [
-                    Register::General(RegisterType::RDI),
-                    Register::General(RegisterType::RSI),
-                    Register::General(RegisterType::RDX),
-                    Register::General(RegisterType::RCX),
-                    Register::Extended(8),  // r8
-                    Register::Extended(9),  // r9
-                ];
+        // Push the contents of these registers onto the stack
+        for reg in live_registers.iter() {
+            instructions.push(Instruction::Push(Argument::Register(reg.clone())));
+            saved_registers.push(reg.clone());
+        }
+    }
 
-                for (i, arg) in args.iter().enumerate() {
-                    if i < arg_registers.len() {
-                        match arg {
-                            TacValue::Variable(var) => {
-                                let src_reg = get_register(var, register_allocation)?;
-                                instructions.push(Instruction::Mov(Argument::Register(arg_registers[i].clone()), Argument::Register(src_reg)));
-                            }
-                            TacValue::Constant(imm) => {
-                                instructions.push(Instruction::Mov(Argument::Register(arg_registers[i].clone()), Argument::Immediate(*imm as u64)));
-                            }
-                            _ => {
-                                return Err(Error::SimpleError{message: format!("Unsupported TacValue in Call argument: {:?}", arg)});
-                            }
-                        }
-                    } else {
-                        return Err(Error::SimpleError{message: format!("More than 6 arguments not supported in Call")});
-                    }
+    // Move arguments into appropriate registers
+    let arg_registers = [
+        Register::General(RegisterType::RCX),
+        Register::General(RegisterType::RDX),
+        Register::Extended(8),  // r8
+        Register::Extended(9),  // r9
+    ];
+
+    for (i, arg) in args.iter().enumerate() {
+        if i < arg_registers.len() {
+            match arg {
+                TacValue::Variable(var) => {
+                    let src_reg = get_register(var, register_allocation)?;
+                    instructions.push(Instruction::Mov(Argument::Register(arg_registers[i].clone()), Argument::Register(src_reg)));
                 }
-
-                // Call the function
-                instructions.push(Instruction::Jmp(func_name.clone()));
-
-                // Move return value from rax to the appropriate variable, if needed
-                if let Some(ret_var) = return_var {
-                    let ret_reg = get_register(ret_var, register_allocation)?;
-                    instructions.push(Instruction::Mov(Argument::Register(ret_reg), Argument::Register(Register::General(RegisterType::RAX))));
+                TacValue::Constant(imm) => {
+                    instructions.push(Instruction::Mov(Argument::Register(arg_registers[i].clone()), Argument::Immediate(*imm as i64)));
                 }
-
-                // Restore saved caller-saved registers
-                for reg in saved_registers.iter().rev() {
-                    instructions.push(Instruction::Pop(Argument::Register(reg.clone())));
+                _ => {
+                    return Err(Error::SimpleError{message: format!("Unsupported TacValue in Call argument: {:?}", arg)});
+                }
+            }
+        } else {
+            // Push the rest of the arguments onto the stack (right to left)
+            match arg {
+                TacValue::Variable(var) => {
+                    let src_reg = get_register(var, register_allocation)?;
+                    instructions.push(Instruction::Push(Argument::Register(src_reg)));
+                }
+                TacValue::Constant(imm) => {
+                    instructions.push(Instruction::Push(Argument::Immediate(*imm as i64)));
+                }
+                _ => {
+                    return Err(Error::SimpleError{message: format!("Unsupported TacValue in Call argument: {:?}", arg)});
                 }
             }
         }
     }
-    Ok(instructions)
+
+    // Call the function
+    if is_syscall {
+        // System call, we need to know the name of the syscall function to find it in the IAT
+        instructions.push(Instruction::Syscall(func_name.clone()));
+    } else {
+        // Regular function call
+        instructions.push(Instruction::Jmp(func_name.clone()));
+    }
+
+    // Move return value from rax to the appropriate variable, if needed
+    if let Some(ret_var) = return_var {
+        let ret_reg = get_register(ret_var, register_allocation)?;
+        instructions.push(Instruction::Mov(Argument::Register(ret_reg), Argument::Register(Register::General(RegisterType::RAX))));
+    }
+
+    // Restore saved caller-saved registers
+    for reg in saved_registers.iter().rev() {
+        instructions.push(Instruction::Pop(Argument::Register(reg.clone())));
+    }
+    Ok(())
 }
 
 pub fn print_instructions(instructions: &Vec<Instruction>) {

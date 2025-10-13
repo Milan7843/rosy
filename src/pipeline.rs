@@ -8,6 +8,8 @@ use crate::tokenizer::Error;
 use crate::typechecker;
 use crate::uniquify;
 use crate::livenessanalysis;
+use crate::compiler;
+use crate::assembler;
 
 pub fn run_typecheck_pipeline_from_path(path: &std::path::PathBuf) -> Result<String, String> {
     // Read the file into a big string
@@ -111,15 +113,23 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
     //print!("Typed program:\n{:#?}\n", typed_program);
 
     // Perform uniquification
+    uniquify::uniquify(&mut typed_program);
 
     //print!("Uniquified program:\n{:#?}\n", typed_program);
 
-    match crate::compiler::compile(typed_program) {
-        Ok(_) => {}
+    let assembly =match compiler::compile(typed_program) {
+        Ok(assembly) => assembly,
         Err(error) => {
             print_error(&error, &lines_copy);
             return Err(String::new());
         }
+    };
+
+    let machine_code = assembler::assemble(assembly);
+
+    println!("Machine code ({} bytes):", machine_code.len());
+    for byte in &machine_code {
+        print!("{:02X} ", byte);
     }
 
     return Ok(());

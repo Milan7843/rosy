@@ -101,6 +101,19 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Strin
                     }
                 }
             }
+            TacInstruction::SysCall(function_name, args, return_var) => {
+                if let Some(ret_var) = return_var {
+                    liveness_before.remove(ret_var);
+                }
+                for arg in args {
+                    match arg {
+                        TacValue::Variable(var) => {
+                            liveness_before.insert(var.clone());
+                        }
+                        _ => {}
+                    }
+                }
+            }
         }
 
         liveness.push(liveness_before);

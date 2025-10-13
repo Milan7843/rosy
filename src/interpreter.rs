@@ -29,7 +29,7 @@ fn add_default_functions_to_env(env: &mut Environment) {
 
 #[derive(Clone)]
 enum Value {
-    Number(i32),
+    Number(i64),
     Bool(bool),
     String(String),
     Function {
@@ -733,7 +733,7 @@ fn interpret_expr(
                         });
                     }
 
-                    let result = i32::pow(left, right as u32);
+                    let result = i64::pow(left, right as u32);
                     return Ok(Some(Value::Number(result)));
                 }
                 (Some(left_value), Some(right_value)) => {

@@ -86,7 +86,7 @@ pub struct Token {
 pub enum TokenData {
     Variable { name: String },
     Symbol { symbol_type: SymbolType },
-    Number { number: i32 },
+    Number { number: i64 },
     String { value: String },
 }
 
@@ -458,7 +458,7 @@ pub fn tokenize(lines: Vec<&str>) -> Result<Vec<TokenLine>, Error> {
 
                     in_number = true;
                     if let Some(number) = c.to_digit(10) {
-                        current_number = current_number * 10 + number as i32;
+                        current_number = current_number * 10 + number as i64;
                     }
                 }
 

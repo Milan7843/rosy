@@ -9,6 +9,7 @@ use crate::parser::RecExprData;
 use crate::tokenizer::Error;
 use crate::typechecker::FunctionType;
 use crate::typechecker::Type;
+use crate::defaultfunctions;
 
 #[derive(Debug, Clone)]
 pub enum TacInstruction {
@@ -20,6 +21,7 @@ pub enum TacInstruction {
     Label(String),
     FunctionLabel(String, Vec<String>), // Function entry point label with name and parameter names
     Call(String, Vec<TacValue>, Option<String>),
+    SysCall(String, Vec<TacValue>, Option<String>),
     Return(Option<TacValue>),
 }
 
@@ -57,21 +59,21 @@ pub enum ComparisonOp {
 
 #[derive(Debug, Clone)]
 pub enum TacValue {
-    Constant(i32),
+    Constant(i64),
     Variable(String),
     StringLiteral(String),
 }
 
 #[derive(Debug, Clone)]
 pub struct TacFunction {
-    name: String,
-    params: Vec<Type>,
-    return_type: Type,
-    label: String,
+    pub name: String,
+    pub params: Vec<Type>,
+    pub return_type: Type,
+    pub label: String,
 }
 
-struct TacFunctionEnvironment {
-    functions: Vec<TacFunction>,
+pub struct TacFunctionEnvironment {
+    pub functions: Vec<TacFunction>,
 }
 
 // TODO remove
@@ -106,7 +108,7 @@ fn find_function(
 }
 
 fn add_functions(
-    functions: Vec<FunctionType>,
+    functions: &Vec<FunctionType>,
     function_env: &mut TacFunctionEnvironment,
     variable_env: &mut TacVariableEnvironment,
     instructions: &mut Vec<TacInstruction>,
@@ -114,6 +116,10 @@ fn add_functions(
     label_counter: &mut i64,
 ) -> Result<(), Error> {
     for function in functions {
+        if defaultfunctions::is_default_function(&function.name) {
+            continue;
+        }
+
         let label = format!("func_{}", function.name);
 
         function_env.functions.push(TacFunction {
@@ -126,9 +132,9 @@ fn add_functions(
         // Now we can generate TAC for the function body
         instructions.push(TacInstruction::FunctionLabel(label, function.param_names.clone()));
 
-        for expr in function.content {
+        for expr in &function.content {
             generate_tac_for_base_expr(
-                &expr,
+                expr,
                 instructions,
                 temp_counter,
                 label_counter,
@@ -182,13 +188,14 @@ pub fn generate_tac(
         }],
     };
     add_functions(
-        functions,
+        &functions,
         &mut function_env,
         &mut variable_env,
         &mut instructions,
         &mut temp_counter,
         &mut label_counter,
     )?;
+    defaultfunctions::add_default_functions(functions, &mut function_env, &mut instructions, &mut temp_counter, &mut label_counter);
 
     for expr in program {
         generate_tac_for_base_expr(
@@ -735,6 +742,13 @@ fn print_instruction(instr: &TacInstruction) {
                 println!("{} = call {}({:?})", ret_var, func, args);
             } else {
                 println!("call {}({:?})", func, args);
+            }
+        }
+        TacInstruction::SysCall(func, args, ret) => {
+            if let Some(ret_var) = ret {
+                println!("{} = syscall {}({:?})", ret_var, func, args);
+            } else {
+                println!("syscall {}({:?})", func, args);
             }
         }
         TacInstruction::Return(ret) => {

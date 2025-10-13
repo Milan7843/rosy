@@ -72,7 +72,7 @@ pub enum RecExprData<T: Clone> {
         name: String,
     },
     Number {
-        number: i32,
+        number: i64,
     },
     String {
         value: String,
@@ -174,7 +174,7 @@ enum GenExprData {
         name: String,
     },
     Number {
-        number: i32,
+        number: i64,
     },
     String {
         value: String,
