@@ -10,11 +10,11 @@ use crate::codegenerator::Register;
 use crate::codegenerator::RegisterType;
 use crate::compiler;
 
-pub fn write_exe_file(path: &std::path::PathBuf) -> std::io::Result<()> {
+pub fn write_exe_file(path: &std::path::PathBuf, machine_code: &Vec<u8>) -> std::io::Result<()> {
 	let mut file = std::fs::File::create(path)?;
 
 	// Write headers
-	write_headers(&mut file)?;
+	write_headers(&mut file, machine_code)?;
 
 	Ok(())
 }
@@ -26,7 +26,7 @@ pub struct ImportEntry {
 	pub function_address_rvas: Vec<u32>, // RVA of the function (filled in later)
 }
 
-fn write_headers(file: &mut File) -> std::io::Result<()> {
+fn write_headers(file: &mut File, machine_code: &Vec<u8>) -> std::io::Result<()> {
 	let size_of_code: u32 = 0x200;
 	let size_of_initialized_data: u32 = 0x800;
 	let size_of_uninitialized_data: u32 = 0x00;
@@ -286,83 +286,17 @@ fn write_headers(file: &mut File) -> std::io::Result<()> {
 		0x61, 0x00, // "a\0"
 	];
 
-	let assembly: Vec<Instruction> = vec![
-		Instruction::Mov(
-			Argument::Register(Register::General(RegisterType::RAX)),
-			Argument::Register(Register::General(RegisterType::RBX)),
-		),
-		Instruction::Mov(
-			Argument::Register(Register::Extended(3)),
-			Argument::Register(Register::General(RegisterType::RBX)),
-		),
-		Instruction::Mov(
-			Argument::Register(Register::General(RegisterType::RAX)),
-			Argument::Register(Register::Extended(7)),
-		),
-		Instruction::Mov(
-			Argument::Register(Register::General(RegisterType::RAX)),
-			Argument::Immediate(1),
-		),
-		Instruction::Mov(
-			Argument::Register(Register::Extended(3)),
-			Argument::Immediate(1),
-		),
-		Instruction::Mov(
-			Argument::Register(Register::General(RegisterType::RAX)),
-			Argument::MemoryAddress(1),
-		),
-		Instruction::Mov(
-			Argument::MemoryAddress(1),
-			Argument::Register(Register::Extended(7)),
-		),
-		// All possible cases of Add
-		Instruction::Add(
-			Argument::Register(Register::General(RegisterType::RAX)),
-			Argument::Immediate(1),
-		),
-		Instruction::Add(
-			Argument::Register(Register::General(RegisterType::RAX)),
-			Argument::Register(Register::General(RegisterType::RBX)),
-		),
-		Instruction::Add(
-			Argument::Register(Register::General(RegisterType::RAX)),
-			Argument::MemoryAddress(1),
-		),
-		Instruction::Add(
-			Argument::Register(Register::Extended(3)),
-			Argument::Immediate(1),
-		),
-		Instruction::Add(
-			Argument::Register(Register::Extended(3)),
-			Argument::Register(Register::General(RegisterType::RBX)),
-		),
-		Instruction::Add(
-			Argument::Register(Register::Extended(3)),
-			Argument::MemoryAddress(1),
-		),
-		Instruction::Add(Argument::MemoryAddress(1), Argument::Immediate(1)),
-		Instruction::Add(
-			Argument::MemoryAddress(1),
-			Argument::Register(Register::General(RegisterType::RBX)),
-		),
-		Instruction::Add(
-			Argument::MemoryAddress(1),
-			Argument::Register(Register::Extended(3)),
-		),
-	];
-
-	let mut program2 = assembler::assemble(assembly);
-
 	// Patch the relative calls
-	write_at_u32(&mut program, 13, get_std_handle_rel32);
-	write_at_u32(&mut program, 50, write_file_rel32);
-	write_at_u32(&mut program, 59, exit_process_rel32);
+	//write_at_u32(&mut program, 13, get_std_handle_rel32);
+	//write_at_u32(&mut program, 50, write_file_rel32);
+	//write_at_u32(&mut program, 59, exit_process_rel32);
 
-	write_bytes(&mut file_headers, &program2);
+	//write_bytes(&mut file_headers, &program2);
+	write_bytes(&mut file_headers, &machine_code);
 
 	//write_bytes(&mut file_headers, &[0x55, 0x48, 0x89, 0xe5, 0x90, 0x5d, 0xc3, 0x55, 0x48, 0x89, 0xe5, 0x48, 0x83, 0xec, 0x20, 0xe8, 0xec, 0xff, 0xff, 0xff, 0xb9, 0x00, 0x00, 0x00, 0x00, 0x48, 0x8b, 0x05, 0x18, 0x40, 0x00, 0x00, 0xff, 0xd0, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0xff, 0x25, 0x02, 0x40, 0x00, 0x00, 0x90, 0x90, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00]);
 	// THE DATA for our program will be at 0x600 (1536) in memory
-	padding_needed = 512 - program.len();
+	padding_needed = 512 - machine_code.len();
 	write_zeroes(&mut file_headers, padding_needed);
 
 	let idata_size = idata.len() as u32;

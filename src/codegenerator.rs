@@ -44,7 +44,7 @@ fn to_register(reg_num: isize) -> Register {
         -3 => Register::General(RegisterType::RBP),
         -4 => Register::Extended(11), // r11
         -5 => Register::Extended(15), // r15
-        _ if reg_num > 10 => Register::Extended((reg_num - 10) as u8), // TODO Stack location [rsp + (reg_num - 10) * 8] 
+        //_ if reg_num > 10 => Register::Extended((reg_num - 10) as u8), // TODO Stack location [rsp + (reg_num - 10) * 8] 
         _ => panic!("Invalid register number: {}", reg_num),
     }
 }
@@ -58,7 +58,7 @@ fn is_caller_saved(register: &Register) -> bool {
         Register::Extended(num) => match num {
             8 | 9 | 10 | 11 => true,  // r8, r9, r10, r11
             12 | 13 | 14 | 15 => false, // r12, r13, r14, r15
-            _ => panic!("Invalid extended register number: {}", num),
+            _ => panic!("Invalid extended register number (code gen): {}", num),
         },
     }
 }
@@ -116,6 +116,28 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
             }
             TacInstruction::FunctionLabel(name, params) => {
                 instructions.push(Instruction::Label(name.clone()));
+                // Now we need to move the parameters from their argument registers to their allocated registers
+                let arg_registers = [
+                    Register::General(RegisterType::RCX),
+                    Register::General(RegisterType::RDX),
+                    Register::Extended(8),  // r8
+                    Register::Extended(9),  // r9
+                ];
+                for (i, param) in params.iter().enumerate() {
+                    if let Some(&reg_num) = register_allocation.get(param) {
+                        let dest_reg = to_register(reg_num);
+                        if i < arg_registers.len() {
+                            // Move from argument register to allocated register
+                            instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Register(arg_registers[i].clone())));
+                        } else {
+                            // Parameter passed on stack, need to load from [rsp + offset]
+                            let stack_offset = ((i - arg_registers.len()) * 8) as u64;
+                            instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::MemoryAddress(stack_offset)));
+                        }
+                    } else {
+                        return Err(Error::SimpleError{message: format!("Function parameter {} not found in register allocation", param)});
+                    }
+                }
             }
             TacInstruction::Assign(dest, value) => {
                 let dest_reg = get_register(dest, register_allocation)?;

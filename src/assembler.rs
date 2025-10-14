@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::codegenerator::*;
 
 fn get_rex_byte(w: bool, r: bool, x: bool, b: bool) -> u8 {
@@ -19,10 +21,11 @@ fn get_rm(reg: Register) -> u8 {
             RegisterType::RDI => 7,
         },
         Register::Extended(num) => {
-            if num < 8 {
-                num
+            // r8 through r15
+            if num >= 8 && num <= 15 {
+                return (num - 8) as u8;
             } else {
-                panic!("Register number out of range for R/M field");
+                panic!("Invalid extended register number (assembler): {}", num);
             }
         }
     }
@@ -38,8 +41,16 @@ fn get_register_is_extended(reg: &Register) -> bool {
 pub fn assemble(instructions: Vec<Instruction>) -> Vec<u8> {
     let mut machine_code = Vec::new();
 
+    let mut label_addresses: HashMap<String, usize> = std::collections::HashMap::new();
+    let mut jumps_to_resolve: Vec<(String, usize)> = Vec::new();
+    let mut syscalls_to_resolve: Vec<(String, usize)> = Vec::new();
+ 
     for instr in instructions {
         match instr {
+            Instruction::Label(label) => {
+                // The address of the label is the current length of machine_code
+                label_addresses.insert(label, machine_code.len());
+            }
             Instruction::Mov(dest, src) => {
                 match (dest, src) {
                     (Argument::Register(r1), Argument::Register(r2)) => {
@@ -137,6 +148,62 @@ pub fn assemble(instructions: Vec<Instruction>) -> Vec<u8> {
                         unimplemented!("ADD not implemented yet");
                     }
                 }
+            }
+            Instruction::Jmp(to_label) => {
+                // Placeholder for JMP instruction
+                write_u8(&mut machine_code, 0xE9); // JMP opcode
+                let pos = machine_code.len();
+
+                // Placeholder for relative address
+                write_u32(&mut machine_code, 0);
+
+                // This jump still needs its address resolved
+                jumps_to_resolve.push((to_label, pos));
+            }
+            Instruction::Push(argument) => {
+                match argument {
+                    Argument::Register(r) => {
+                        let rex_b = get_register_is_extended(&r);
+                        if rex_b {
+                            write_u8(&mut machine_code, get_rex_byte(true, false, false, rex_b));
+                        }
+                        write_u8(&mut machine_code, 0x50 | get_rm(r)); // PUSH r64
+                    }
+                    Argument::Immediate(imm) => {
+                        if imm >= -128 && imm <= 127 {
+                            write_u8(&mut machine_code, 0x6A); // PUSH imm8
+                            write_u8(&mut machine_code, imm as u8);
+                        } else {
+                            write_u8(&mut machine_code, 0x68); // PUSH imm32
+                            write_u32(&mut machine_code, imm as u32);
+                        }
+                    }
+                    _ => {
+                        unimplemented!("PUSH not implemented for this argument type");
+                    }
+                }
+            }
+            Instruction::Pop(argument) => {
+                match argument {
+                    Argument::Register(r) => {
+                        let rex_b = get_register_is_extended(&r);
+                        write_u8(&mut machine_code, get_rex_byte(true, false, false, rex_b)); // REX.W prefix
+                        write_u8(&mut machine_code, 0x58 | get_rm(r)); // POP r64
+                    }
+                    _ => {
+                        unimplemented!("POP not implemented for this argument type");
+                    }
+                }
+            }
+            Instruction::Ret => {
+                write_u8(&mut machine_code, 0xC3); // RET opcode
+            }
+            Instruction::Syscall(syscall_function) => {
+                write_u8(&mut machine_code, 0x0F); // Two-byte opcode prefix
+                write_u8(&mut machine_code, 0x05); // SYSCALL opcode
+                let pos = machine_code.len();
+                write_u32(&mut machine_code, 0); // Placeholder for relative syscall address
+                syscalls_to_resolve.push((syscall_function, pos));
             }
             Instruction::Nop => {
                 machine_code.push(0x90); // NOP opcode

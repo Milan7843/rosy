@@ -3,6 +3,7 @@ use rosy::interpreter;
 use rosy::parser;
 use rosy::pipeline;
 use rosy::tokenizer;
+use std::env;
 
 // Language features:
 /*
@@ -77,6 +78,7 @@ struct Cli {
 }
 
 pub fn main() {
+    //env::set_var("RUST_BACKTRACE", "1");
     let args = Cli::parse();
 
     match args.command {

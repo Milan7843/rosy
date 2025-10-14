@@ -1,3 +1,4 @@
+use std::path;
 use std::path::PathBuf;
 
 use crate::desugarer;
@@ -10,6 +11,7 @@ use crate::uniquify;
 use crate::livenessanalysis;
 use crate::compiler;
 use crate::assembler;
+use crate::exewriter;
 
 pub fn run_typecheck_pipeline_from_path(path: &std::path::PathBuf) -> Result<String, String> {
     // Read the file into a big string
@@ -130,6 +132,12 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
     println!("Machine code ({} bytes):", machine_code.len());
     for byte in &machine_code {
         print!("{:02X} ", byte);
+    }
+
+    let path = PathBuf::from("output.exe");
+    match exewriter::write_exe_file(&path, &machine_code) {
+        Ok(_) => println!("\nCompiled to {}", path.with_extension("exe").display()),
+        Err(err) => println!("Error writing exe file: {}", err),
     }
 
     return Ok(());

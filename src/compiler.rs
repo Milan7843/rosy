@@ -11,6 +11,7 @@ use crate::codegenerator;
 use crate::livenessanalysis;
 use crate::uniquify;
 use crate::registerallocation::interferencegraph;
+use crate::registerallocation::variableclassifier;
 use crate::variablecollector;
 
 pub fn compile(
@@ -19,6 +20,7 @@ pub fn compile(
     let tac_instructions = tac::generate_tac(base_expressions.0, base_expressions.1)?;
 
     let all_variable_names = variablecollector::collect_variable_names(&tac_instructions);
+    let function_arguments = variableclassifier::get_function_arguments(&tac_instructions);
 
     let liveness = livenessanalysis::analyze_liveness(&tac_instructions);
 
@@ -26,7 +28,7 @@ pub fn compile(
 
 	let interference_graph = interferencegraph::build_interference_graph(&tac_instructions, &liveness, &all_variable_names);
 
-    let register_allocation = registerallocator::allocate_registers(&interference_graph);
+    let register_allocation = registerallocator::allocate_registers(&interference_graph, &function_arguments);
 
     let instructions = codegenerator::generate_code(&tac_instructions, &register_allocation, &liveness)?;
 

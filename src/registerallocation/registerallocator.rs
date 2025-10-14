@@ -13,7 +13,15 @@ struct AllocationNode {
 	neighbors: HashSet<String>,
 }
 
-pub fn allocate_registers(interference_graph: &InterferenceGraph) -> HashMap<String, isize> {
+fn is_function_argument(var: &String, function_args: &HashMap<String, usize>) -> bool {
+	return function_args.contains_key(var);
+}
+
+fn get_function_argument_index(var: &String, function_args: &HashMap<String, usize>) -> Option<usize> {
+	return function_args.get(var).cloned();
+}
+
+pub fn allocate_registers(interference_graph: &InterferenceGraph, function_args: &HashMap<String, usize>) -> HashMap<String, isize> {
 
 	let mut allocation_network = HashMap::new();
 	for (var, neighbors) in interference_graph.adjacency_list.iter() {
