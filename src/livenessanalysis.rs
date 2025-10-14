@@ -19,6 +19,21 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Strin
             TacInstruction::Label(_) => {
                 // Labels do not affect liveness
             }
+            TacInstruction::MovRSPTo(var) => {
+                // Moving RSP to a variable makes that variable live
+                liveness_before.insert(var.clone());
+            }
+            TacInstruction::Push(value) => {
+                match value {
+                    TacValue::Variable(var) => {
+                        liveness_before.insert(var.clone());
+                    }
+                    _ => {}
+                }
+            }
+            TacInstruction::Pop(var) => {
+                liveness_before.remove(var);
+            }
             TacInstruction::FunctionLabel(name, params) => {
                 // Function entry point: parameters are live
                 for param in params {

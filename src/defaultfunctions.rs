@@ -23,6 +23,9 @@ pub fn add_default_functions(
     label_counter: &mut i64)
 {
 	for func in functions {
+		if !func.is_used {
+			continue;
+		}
 		if is_default_function(&func.name) {
 			match func.name.as_str() {
 				"print" => {
@@ -54,7 +57,7 @@ fn default_print_function(
 		label: label.clone(),
 	});
 
-	instructions.push(TacInstruction::FunctionLabel(func.name.clone(), vec![param_name.clone()]));
+	instructions.push(TacInstruction::FunctionLabel(label.clone(), vec![param_name.clone()]));
 
 	// GetStdHandle
 	let stdhandle_temp = format!("stdhandle{}", temp_counter);
@@ -72,7 +75,12 @@ fn default_print_function(
 	*temp_counter += 1;
 	let lp_overlapped_temp = format!("lpoverlapped{}", temp_counter);
 	*temp_counter += 1;
+	let stack_offset_temp = format!("stackoffset{}", temp_counter);
+	*temp_counter += 1;
 
+	// Integer to write
+	instructions.push(TacInstruction::Push(TacValue::Variable(param_name.clone())));
+	instructions.push(TacInstruction::MovRSPTo(stack_offset_temp.clone()));
 	// Number of bytes to write
 	instructions.push(TacInstruction::Assign(number_of_bytes_temp.clone(), TacValue::Constant(4)));
 	// Pointer to number of bytes written (NULL)
@@ -80,13 +88,16 @@ fn default_print_function(
 	// lpOverlapped (NULL)
 	instructions.push(TacInstruction::Assign(lp_overlapped_temp.clone(), TacValue::Constant(0)));
 	// Call WriteFile
-	instructions.push(TacInstruction::Call("WriteFile".to_string(), vec![
+	instructions.push(TacInstruction::SysCall("WriteFile".to_string(), vec![
 		TacValue::Variable(stdhandle_location_temp),
-		TacValue::Variable(param_name.clone()),
+		TacValue::Variable(stack_offset_temp),
 		TacValue::Variable(number_of_bytes_temp),
 		TacValue::Variable(bytes_written_temp),
 		TacValue::Variable(lp_overlapped_temp),
 	], None));
+
+	// Clean up the stack
+	instructions.push(TacInstruction::Pop(param_name));
 
 	instructions.push(TacInstruction::Return(None));
 }

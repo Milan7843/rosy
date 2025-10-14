@@ -23,6 +23,9 @@ pub enum TacInstruction {
     Call(String, Vec<TacValue>, Option<String>),
     SysCall(String, Vec<TacValue>, Option<String>),
     Return(Option<TacValue>),
+    Push(TacValue),
+    Pop(String),
+    MovRSPTo(String), // Move RSP to the given variable (used for stack management)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -758,6 +761,15 @@ fn print_instruction(instr: &TacInstruction) {
                 println!("return");
             }
             println!("end");
+        }
+        TacInstruction::Push(value) => {
+            println!("push {:?}", value);
+        }
+        TacInstruction::Pop(var) => {
+            println!("pop {}", var);
+        }
+        TacInstruction::MovRSPTo(var) => {
+            println!("mov_rsp_to {}", var);
         }
     }
 }

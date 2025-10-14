@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::codegenerator::*;
+use crate::exewriter::write_at_bytes;
 
 fn get_rex_byte(w: bool, r: bool, x: bool, b: bool) -> u8 {
     0x40 | ((w as u8) << 3) | ((r as u8) << 2) | ((x as u8) << 1) | (b as u8)
@@ -38,7 +39,20 @@ fn get_register_is_extended(reg: &Register) -> bool {
     }
 }
 
-pub fn assemble(instructions: Vec<Instruction>) -> Vec<u8> {
+fn resolve_addresses(label_addresses: &HashMap<String, usize>, jumps_to_resolve: &mut Vec<(String, usize)>, machine_code: &mut Vec<u8>) {
+    for (label, pos) in jumps_to_resolve.iter() {
+        if let Some(&label_addr) = label_addresses.get(label) {
+            let jump_from = pos + 4; // After the 4-byte relative address
+            let relative_addr = (label_addr as isize - jump_from as isize) as u32;
+            let bytes = relative_addr.to_le_bytes();
+            write_at_bytes(machine_code, *pos, &bytes);
+        } else {
+            panic!("Undefined label: {}", label);
+        }
+    }
+}
+
+pub fn assemble(instructions: Vec<Instruction>) -> (Vec<u8>, Vec<(String, usize)>) {
     let mut machine_code = Vec::new();
 
     let mut label_addresses: HashMap<String, usize> = std::collections::HashMap::new();
@@ -149,6 +163,33 @@ pub fn assemble(instructions: Vec<Instruction>) -> Vec<u8> {
                     }
                 }
             }
+            Instruction::Sub(dest, src) => {
+                match (dest, src) {
+                    (Argument::Register(r1), Argument::Register(r2)) => {
+                        let rex_b = get_register_is_extended(&r1);
+                        let rex_r = get_register_is_extended(&r2);
+
+                        write_u8(&mut machine_code, get_rex_byte(true, rex_r, false, rex_b)); // REX.W prefix
+                        write_u8(&mut machine_code, 0x29); // SUB r/m64, r64
+
+                        let mod_rm = 0b11_000_000 | (get_rm(r2) << 3) | get_rm(r1);
+                        write_u8(&mut machine_code, mod_rm);
+                    }
+                    (Argument::Register(r), Argument::Immediate(imm)) => {
+                        let rex_b = get_register_is_extended(&r);
+
+                        write_u8(&mut machine_code, get_rex_byte(true, false, false, rex_b)); // REX.W prefix
+                        write_u8(&mut machine_code, 0x81); // SUB r/m64, imm32
+                        let mod_rm = 0b11_000_000 | (0b101 << 3) | get_rm(r); // MOD=11, REG=101 (SUB), R/M=r
+                        write_u8(&mut machine_code, mod_rm);
+                        write_u32(&mut machine_code, imm as u32); // 32-bit immediate
+                    }
+                    _ => {
+                        // Placeholder for other SUB cases
+                        unimplemented!("SUB not implemented yet");
+                    }
+                }
+            }
             Instruction::Jmp(to_label) => {
                 // Placeholder for JMP instruction
                 write_u8(&mut machine_code, 0xE9); // JMP opcode
@@ -199,14 +240,34 @@ pub fn assemble(instructions: Vec<Instruction>) -> Vec<u8> {
                 write_u8(&mut machine_code, 0xC3); // RET opcode
             }
             Instruction::Syscall(syscall_function) => {
-                write_u8(&mut machine_code, 0x0F); // Two-byte opcode prefix
-                write_u8(&mut machine_code, 0x05); // SYSCALL opcode
+                // mov rax, imm64
+                write_u8(&mut machine_code, 0x48);
+                write_u8(&mut machine_code, 0xB8);
+
+                // placeholder for the 8-byte absolute function address (will be patched later)
                 let pos = machine_code.len();
-                write_u32(&mut machine_code, 0); // Placeholder for relative syscall address
+                write_u64(&mut machine_code, 0); // 8 bytes of zero for now
+
+                // call rax
+                write_u8(&mut machine_code, 0xFF);
+                write_u8(&mut machine_code, 0xD0);
+
+                // record where to patch the 8-byte immediate and which function to resolve
                 syscalls_to_resolve.push((syscall_function, pos));
             }
             Instruction::Nop => {
                 machine_code.push(0x90); // NOP opcode
+            }
+            Instruction::Call(func_name) => {
+                // Placeholder for CALL instruction
+                write_u8(&mut machine_code, 0xE8); // CALL opcode
+                let pos = machine_code.len();
+
+                // Placeholder for relative address
+                write_u32(&mut machine_code, 0);
+
+                // This call still needs its address resolved
+                jumps_to_resolve.push((func_name, pos));
             }
             _ => {
                 // Placeholder for other instructions
@@ -215,7 +276,10 @@ pub fn assemble(instructions: Vec<Instruction>) -> Vec<u8> {
         }
     }
 
-    machine_code
+    // Resolve all jumps to their correct addresses
+    resolve_addresses(&label_addresses, &mut jumps_to_resolve, &mut machine_code);
+
+    (machine_code, syscalls_to_resolve)
 }
 
 fn write_u8(buf: &mut Vec<u8>, value: u8) -> usize {

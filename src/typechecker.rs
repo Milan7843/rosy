@@ -44,6 +44,7 @@ pub struct FunctionType {
     pub param_types: Vec<Type>,
     pub return_type: Type,
     pub content: Vec<BaseExpr<Type>>, // The content of the function with types filled in
+    pub is_used: bool,
 }
 
 struct TypeEnvironment {
@@ -85,6 +86,7 @@ fn add_default_functions_to_env(env: &mut TypeEnvironment) {
         param_types: vec![Type::String],
         return_type: Type::Undefined,
         content: Vec::new(),
+        is_used: false,
     });
     env.functions.push(FunctionType {
         name: String::from("print"),
@@ -92,6 +94,7 @@ fn add_default_functions_to_env(env: &mut TypeEnvironment) {
         param_types: vec![Type::Integer],
         return_type: Type::Undefined,
         content: Vec::new(),
+        is_used: false,
     });
     env.functions.push(FunctionType {
         name: String::from("print"),
@@ -99,6 +102,7 @@ fn add_default_functions_to_env(env: &mut TypeEnvironment) {
         param_types: vec![Type::Float],
         return_type: Type::Undefined,
         content: Vec::new(),
+        is_used: false,
     });
     env.functions.push(FunctionType {
         name: String::from("print"),
@@ -106,6 +110,7 @@ fn add_default_functions_to_env(env: &mut TypeEnvironment) {
         param_types: vec![Type::Boolean],
         return_type: Type::Undefined,
         content: Vec::new(),
+        is_used: false,
     });
 
     env.functions.push(FunctionType {
@@ -114,6 +119,7 @@ fn add_default_functions_to_env(env: &mut TypeEnvironment) {
         param_types: vec![Type::String],
         return_type: Type::Undefined,
         content: Vec::new(),
+        is_used: false,
     });
     env.functions.push(FunctionType {
         name: String::from("println"),
@@ -121,6 +127,7 @@ fn add_default_functions_to_env(env: &mut TypeEnvironment) {
         param_types: vec![Type::Integer],
         return_type: Type::Undefined,
         content: Vec::new(),
+        is_used: false,
     });
     env.functions.push(FunctionType {
         name: String::from("println"),
@@ -128,6 +135,7 @@ fn add_default_functions_to_env(env: &mut TypeEnvironment) {
         param_types: vec![Type::Float],
         return_type: Type::Undefined,
         content: Vec::new(),
+        is_used: false,
     });
     env.functions.push(FunctionType {
         name: String::from("println"),
@@ -135,6 +143,7 @@ fn add_default_functions_to_env(env: &mut TypeEnvironment) {
         param_types: vec![Type::Boolean],
         return_type: Type::Undefined,
         content: Vec::new(),
+        is_used: false,
     });
 }
 
@@ -184,9 +193,10 @@ fn find_matching_function_in_env(
     env: &mut TypeEnvironment,
     func_env: &FunctionEnvironment,
 ) -> Result<Type, Error> {
-    for function in env.functions.iter() {
+    for function in env.functions.iter_mut() {
         if function.name == *name {
             if function.param_types == *param_types {
+                function.is_used = true;
                 return Ok(function.return_type.clone());
             }
         }
@@ -234,6 +244,7 @@ fn find_matching_function_in_env(
                         param_types: param_types.clone(),
                         return_type: return_type.clone(),
                         content: typed_base_expressions.0,
+                        is_used: true,
                     });
                     return Ok(return_type);
                 }

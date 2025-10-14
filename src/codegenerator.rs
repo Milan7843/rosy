@@ -95,6 +95,7 @@ pub enum Instruction {
     Pop(Argument),  // register
     Label(String),  // label name
     Syscall(String), // name of the syscall function (used for IAT)
+    Call(String),   // function name
     Nop,
 }
 
@@ -304,9 +305,33 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
             TacInstruction::SysCall(func_name, args, return_var) => {
                 generate_code_for_call(&mut instructions, func_name, args, return_var, register_allocation, liveness, instruction_index, true)?;
             }
-
+            TacInstruction::MovRSPTo(var_name) => {
+                let dest_reg = get_register(var_name, register_allocation)?;
+                instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Register(Register::General(RegisterType::RSP))));
+            }
+            TacInstruction::Push(value) => {
+                match value {
+                    TacValue::Variable(var) => {
+                        let src_reg = get_register(var, register_allocation)?;
+                        instructions.push(Instruction::Push(Argument::Register(src_reg)));
+                    }
+                    TacValue::Constant(imm) => {
+                        instructions.push(Instruction::Push(Argument::Immediate(*imm as i64)));
+                    }
+                    _ => {
+                        return Err(Error::SimpleError{message: format!("Unsupported TacValue in Push: {:?}", value)});
+                    }
+                }
+            }
+            TacInstruction::Pop(var_name) => {
+                let dest_reg = get_register(var_name, register_allocation)?;
+                instructions.push(Instruction::Pop(Argument::Register(dest_reg)));
+            }
         }
     }
+
+    ensure_stack_alignment(&mut instructions);
+
     Ok(instructions)
 }
 
@@ -381,6 +406,9 @@ fn generate_code_for_call(
             }
         }
     }
+    
+    // reserve 32-byte shadow + 8 for alignment
+    instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(40)));
 
     // Call the function
     if is_syscall {
@@ -388,8 +416,11 @@ fn generate_code_for_call(
         instructions.push(Instruction::Syscall(func_name.clone()));
     } else {
         // Regular function call
-        instructions.push(Instruction::Jmp(func_name.clone()));
+        instructions.push(Instruction::Call(func_name.clone()));
     }
+
+    // Restore the stack pointer
+    instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(40)));
 
     // Move return value from rax to the appropriate variable, if needed
     if let Some(ret_var) = return_var {
@@ -402,6 +433,35 @@ fn generate_code_for_call(
         instructions.push(Instruction::Pop(Argument::Register(reg.clone())));
     }
     Ok(())
+}
+
+fn ensure_stack_alignment(instructions: &mut Vec<Instruction>) {
+    // Count pushes and pops to determine current stack alignment
+    let mut stack_offset: i64 = 0;
+    let mut instruction_index_offset: usize = 0;
+    let instructions_copy = instructions.clone();
+    for (index, instr) in instructions_copy.iter().enumerate() {
+        match instr {
+            Instruction::Push(_) => stack_offset += 8,
+            Instruction::Pop(_) => stack_offset -= 8,
+            Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(imm)) => {
+                stack_offset += *imm;
+            }
+            Instruction::Add(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(imm)) => {
+                stack_offset -= *imm;
+            }
+            Instruction::Call(_) => {
+                if stack_offset % 16 == 0 {
+                    continue; // Already aligned
+                }
+                let adjustment = (16 - stack_offset.rem_euclid(16)) % 16;
+                instructions.insert(index + instruction_index_offset, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(adjustment)));
+                instructions.insert(index + 2 + instruction_index_offset, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(adjustment)));
+                instruction_index_offset += 2; // Account for the two new instructions
+            }
+            _ => {}
+        }
+    }
 }
 
 pub fn print_instructions(instructions: &Vec<Instruction>) {
@@ -477,6 +537,9 @@ fn print_instruction(instruction: &Instruction) {
         }
         Instruction::Syscall(num) => {
             println!("SYSCALL {}", num);
+        }
+        Instruction::Call(func_name) => {
+            println!("CALL {}", func_name);
         }
         Instruction::Nop => {
             println!("NOP");

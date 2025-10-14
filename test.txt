@@ -1,4 +1,1 @@
-a = 2
-fun f(x)
-	return x
-b = f(a)
+print(2)

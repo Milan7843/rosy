@@ -119,7 +119,7 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
 
     //print!("Uniquified program:\n{:#?}\n", typed_program);
 
-    let assembly =match compiler::compile(typed_program) {
+    let assembly = match compiler::compile(typed_program) {
         Ok(assembly) => assembly,
         Err(error) => {
             print_error(&error, &lines_copy);
@@ -127,7 +127,7 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
         }
     };
 
-    let machine_code = assembler::assemble(assembly);
+    let (mut machine_code, syscalls_to_resolve) = assembler::assemble(assembly);
 
     println!("Machine code ({} bytes):", machine_code.len());
     for byte in &machine_code {
@@ -135,7 +135,7 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
     }
 
     let path = PathBuf::from("output.exe");
-    match exewriter::write_exe_file(&path, &machine_code) {
+    match exewriter::write_exe_file(&path, &mut machine_code, &syscalls_to_resolve) {
         Ok(_) => println!("\nCompiled to {}", path.with_extension("exe").display()),
         Err(err) => println!("Error writing exe file: {}", err),
     }

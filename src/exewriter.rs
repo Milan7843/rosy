@@ -10,11 +10,11 @@ use crate::codegenerator::Register;
 use crate::codegenerator::RegisterType;
 use crate::compiler;
 
-pub fn write_exe_file(path: &std::path::PathBuf, machine_code: &Vec<u8>) -> std::io::Result<()> {
+pub fn write_exe_file(path: &std::path::PathBuf, machine_code: &mut Vec<u8>, syscalls_to_resolve: &Vec<(String, usize)>) -> std::io::Result<()> {
 	let mut file = std::fs::File::create(path)?;
 
 	// Write headers
-	write_headers(&mut file, machine_code)?;
+	write_headers(&mut file, machine_code, syscalls_to_resolve)?;
 
 	Ok(())
 }
@@ -26,7 +26,7 @@ pub struct ImportEntry {
 	pub function_address_rvas: Vec<u32>, // RVA of the function (filled in later)
 }
 
-fn write_headers(file: &mut File, machine_code: &Vec<u8>) -> std::io::Result<()> {
+fn write_headers(file: &mut File, machine_code: &mut Vec<u8>, syscalls_to_resolve: &Vec<(String, usize)>) -> std::io::Result<()> {
 	let size_of_code: u32 = 0x200;
 	let size_of_initialized_data: u32 = 0x800;
 	let size_of_uninitialized_data: u32 = 0x00;
@@ -260,6 +260,27 @@ fn write_headers(file: &mut File, machine_code: &Vec<u8>) -> std::io::Result<()>
 		imports[0].function_address_rvas[2]
 	);
 
+	for (syscall_name, at) in syscalls_to_resolve {
+		let mut found = false;
+		for import in &imports {
+			for (i, func_name) in import.function_names.iter().enumerate() {
+				if *func_name == *syscall_name {
+					let func_rva = import.function_address_rvas[i] - 0x1000;
+					write_at_u32(machine_code, *at, func_rva);
+
+					found = true;
+					break;
+				}
+			}
+			if found {
+				break;
+			}
+		}
+		if !found {
+			panic!("Could not find syscall {}", syscall_name);
+		}
+	}
+
 	let get_std_handle_rel32 = imports[0].function_address_rvas[1] - (0x1000 + 11 + 6);
 	let write_file_rel32 = imports[0].function_address_rvas[2] - (0x1000 + 48 + 6);
 	let exit_process_rel32 = imports[0].function_address_rvas[0] - (0x1000 + 57 + 6);
@@ -287,12 +308,14 @@ fn write_headers(file: &mut File, machine_code: &Vec<u8>) -> std::io::Result<()>
 	];
 
 	// Patch the relative calls
-	//write_at_u32(&mut program, 13, get_std_handle_rel32);
+	write_at_u32(&mut program, 13, get_std_handle_rel32);
 	//write_at_u32(&mut program, 50, write_file_rel32);
 	//write_at_u32(&mut program, 59, exit_process_rel32);
 
 	//write_bytes(&mut file_headers, &program2);
-	write_bytes(&mut file_headers, &machine_code);
+	write_bytes(&mut file_headers, machine_code);
+
+	println!("Machine code: {:02X?}", machine_code);
 
 	//write_bytes(&mut file_headers, &[0x55, 0x48, 0x89, 0xe5, 0x90, 0x5d, 0xc3, 0x55, 0x48, 0x89, 0xe5, 0x48, 0x83, 0xec, 0x20, 0xe8, 0xec, 0xff, 0xff, 0xff, 0xb9, 0x00, 0x00, 0x00, 0x00, 0x48, 0x8b, 0x05, 0x18, 0x40, 0x00, 0x00, 0xff, 0xd0, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0xff, 0x25, 0x02, 0x40, 0x00, 0x00, 0x90, 0x90, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00]);
 	// THE DATA for our program will be at 0x600 (1536) in memory
@@ -537,7 +560,7 @@ fn write_at_u64(buf: &mut Vec<u8>, at: usize, value: u64) {
 	buf[at..at + 8].copy_from_slice(&bytes);
 }
 
-fn write_at_bytes(buf: &mut Vec<u8>, at: usize, data: &[u8]) {
+pub fn write_at_bytes(buf: &mut Vec<u8>, at: usize, data: &[u8]) {
 	if buf.len() < at + data.len() {
 		buf.resize(at + data.len(), 0);
 	}
