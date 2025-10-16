@@ -127,7 +127,7 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
         }
     };
 
-    let (mut machine_code, syscalls_to_resolve) = assembler::assemble(assembly);
+    let (mut machine_code, syscalls_to_resolve, starting_point) = assembler::assemble(assembly);
 
     println!("Machine code ({} bytes):", machine_code.len());
     for byte in &machine_code {
@@ -135,7 +135,7 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
     }
 
     let path = PathBuf::from("output.exe");
-    match exewriter::write_exe_file(&path, &mut machine_code, &syscalls_to_resolve) {
+    match exewriter::write_exe_file(&path, &mut machine_code, &syscalls_to_resolve, starting_point) {
         Ok(_) => println!("\nCompiled to {}", path.with_extension("exe").display()),
         Err(err) => println!("Error writing exe file: {}", err),
     }

@@ -14,25 +14,38 @@ use crate::defaultfunctions;
 #[derive(Debug, Clone)]
 pub enum TacInstruction {
     Assign(VariableValue, TacValue),
-    BinOp(String, TacValue, BinOp, TacValue),
-    UnaryOp(String, UnOp, TacValue),
+    BinOp(VariableValue, TacValue, BinOp, TacValue),
+    UnaryOp(VariableValue, UnOp, TacValue),
     Goto(String),
     CompareAndGoto(TacValue, TacValue, ComparisonOp, String),
     Label(String),
     FunctionLabel(String, Vec<String>), // Function entry point label with name and parameter names
-    Call(String, Vec<TacValue>, Option<String>),
-    ExternCall(String, Vec<TacValue>, Option<String>),
+    Call(String, Vec<VariableValue>, Option<VariableValue>),
+    ExternCall(String, Vec<VariableValue>, Option<VariableValue>),
     Return(Option<TacValue>),
     Push(TacValue),
-    Pop(String),
-    MovRSPTo(String), // Move RSP to the given variable (used for stack management)
+    Pop(VariableValue),
+    MovRSPTo(VariableValue), // Move RSP to the given variable (used for stack management)
+    ProgramStart(),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VariableValue {
     Variable(String),
-    FunctionArgument(usize), // Index of the argument
+    VariableWithRequestedRegister(String, isize), // Index of the argument
 }
+
+impl std::fmt::Display for VariableValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VariableValue::Variable(name) => write!(f, "{}", name),
+            VariableValue::VariableWithRequestedRegister(name, reg) => {
+                write!(f, "{} (reg{})", name, reg)
+            }
+        }
+    }
+}
+
 
 #[derive(Debug, Clone, Copy)]
 pub enum BinOp {
@@ -206,6 +219,8 @@ pub fn generate_tac(
     )?;
     defaultfunctions::add_default_functions(functions, &mut function_env, &mut instructions, &mut temp_counter, &mut label_counter);
 
+
+    instructions.push(TacInstruction::ProgramStart());
     for expr in program {
         generate_tac_for_base_expr(
             &expr,
@@ -248,7 +263,7 @@ fn generate_tac_for_base_expr(
                 function_env,
                 variable_env,
             )?;
-            instructions.push(TacInstruction::Assign(var_name.clone(), value));
+            instructions.push(TacInstruction::Assign(VariableValue::Variable(var_name.clone()), value));
         }
         BaseExprData::ForLoop {
             var_name,
@@ -262,7 +277,7 @@ fn generate_tac_for_base_expr(
 
             // Initialize loop variable
             instructions.push(TacInstruction::Assign(
-                var_name.clone(),
+                VariableValue::Variable(var_name.clone()),
                 TacValue::Constant(0),
             ));
             // Start of loop
@@ -298,13 +313,13 @@ fn generate_tac_for_base_expr(
             let increment_temp = format!("t{}", temp_counter);
             *temp_counter += 1;
             instructions.push(TacInstruction::BinOp(
-                increment_temp.clone(),
+                VariableValue::Variable(increment_temp.clone()),
                 TacValue::Variable(var_name.clone()),
                 BinOp::Add,
                 TacValue::Constant(1),
             ));
             instructions.push(TacInstruction::Assign(
-                var_name.clone(),
+                VariableValue::Variable(var_name.clone()),
                 TacValue::Variable(increment_temp),
             ));
             // Jump back to start
@@ -599,7 +614,7 @@ fn generate_tac_for_rec_expr(
             let temp_var = format!("t{}", temp_counter);
             *temp_counter += 1;
             instructions.push(TacInstruction::UnaryOp(
-                temp_var.clone(),
+                VariableValue::Variable(temp_var.clone()),
                 UnOp::Neg,
                 operand,
             ));
@@ -633,6 +648,9 @@ fn generate_tac_for_rec_expr(
                     Err(e) => return Err(e),
                 };
 
+
+            let argument_registers = vec![0, 1, 4, 3];
+
             // Create up to 4 temporary variables for arguments
             let mut arg_temps = Vec::new();
             for (i, arg) in arg_values.iter().enumerate() {
@@ -642,8 +660,11 @@ fn generate_tac_for_rec_expr(
                 }
                 let temp_var = format!("arg{}", temp_counter);
                 *temp_counter += 1;
-                instructions.push(TacInstruction::Assign(temp_var.clone(), arg.clone()));
-                arg_temps.push(TacValue::Variable(temp_var));
+                instructions.push(TacInstruction::Assign(
+                    VariableValue::VariableWithRequestedRegister(temp_var.clone(), argument_registers[i]),
+                    arg.clone(),
+                ));
+                arg_temps.push(VariableValue::VariableWithRequestedRegister(temp_var, argument_registers[i]));
             }
 
             match return_type {
@@ -660,7 +681,7 @@ fn generate_tac_for_rec_expr(
                     instructions.push(TacInstruction::Call(
                         function_label,
                         arg_temps,
-                        Some(temp_var.clone()),
+                        Some(VariableValue::Variable(temp_var.clone())),
                     ));
                     Ok(TacValue::Variable(temp_var))
                 }
@@ -695,7 +716,7 @@ fn generate_binary_op_tac(
     let temp_var = format!("t{}", temp_counter);
     *temp_counter += 1;
     instructions.push(TacInstruction::BinOp(
-        temp_var.clone(),
+        VariableValue::Variable(temp_var.clone()),
         left_val,
         *operator,
         right_val,
@@ -713,6 +734,9 @@ fn print_instructions(instructions: &Vec<TacInstruction>) {
 
 fn print_instruction(instr: &TacInstruction) {
     match instr {
+        TacInstruction::ProgramStart() => {
+            println!("; Program Start");
+        }
         TacInstruction::Assign(var, value) => {
             println!("{} = {:?}", var, value);
         }

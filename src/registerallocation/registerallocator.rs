@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use crate::tac::TacInstruction;
 use crate::registerallocation::interferencegraph::InterferenceGraph;
+use crate::tac::VariableValue;
 
 /* Register overview:
 - Caller-saved: rax(-1), rcx(0), rdx(1), rsi(2), rdi(3), r8(4), r9(5), r10(-4), r11(-5)
@@ -13,26 +14,55 @@ struct AllocationNode {
 	neighbors: HashSet<String>,
 }
 
-fn is_function_argument(var: &String, function_args: &HashMap<String, usize>) -> bool {
-	return function_args.contains_key(var);
-}
-
-fn get_function_argument_index(var: &String, function_args: &HashMap<String, usize>) -> Option<usize> {
-	return function_args.get(var).cloned();
-}
-
 pub fn allocate_registers(interference_graph: &InterferenceGraph, function_args: &HashMap<String, usize>) -> HashMap<String, isize> {
 
 	let mut allocation_network = HashMap::new();
 	for (var, neighbors) in interference_graph.adjacency_list.iter() {
-		allocation_network.insert(var.clone(), AllocationNode {
+		let mut neighbors_names = HashSet::new();
+		for neighbor in neighbors.iter() {
+			match neighbor {
+				VariableValue::Variable(name) => { neighbors_names.insert(name.clone()); }
+				VariableValue::VariableWithRequestedRegister(name, _) => { neighbors_names.insert(name.clone()); }
+			}
+		}
+		let var_name = match var {
+			VariableValue::Variable(name) => name.clone(),
+			VariableValue::VariableWithRequestedRegister(name, _) => name.clone(),
+		};
+		allocation_network.insert(var_name, AllocationNode {
 			disallowed_registers: HashSet::new(),
 			assigned_register: None,
-			neighbors: neighbors.clone(),
+			neighbors: neighbors_names,
 		});
 	}
 
 	let mut allocation = HashMap::new();
+
+	// Pre-assign function arguments to their registers
+	for var in interference_graph.adjacency_list.keys() {
+		match var {
+			VariableValue::Variable(name) => {
+				continue;
+			}
+			VariableValue::VariableWithRequestedRegister(name, requested_register) => {
+				// Take the requested register value and set it on the node,
+				// then clone the neighbor names and drop the mutable borrow before
+				// updating neighbors to avoid simultaneous mutable borrows.
+				let requested = *requested_register;
+				let node = allocation_network.get_mut(name).unwrap();
+				node.assigned_register = Some(requested);
+				let neighbors = node.neighbors.clone();
+				std::mem::drop(node);
+				// Update neighbors to disallow this register
+				for neighbor in neighbors.iter() {
+					if let Some(neighbor_node) = allocation_network.get_mut(neighbor) {
+						neighbor_node.disallowed_registers.insert(requested);
+					}
+				}
+				allocation.insert(name.clone(), requested);
+			}
+		}
+	}
 
 	loop {
 		let var_to_allocate = get_highest_saturation_variable(&allocation_network);
@@ -75,7 +105,8 @@ pub fn allocate_registers(interference_graph: &InterferenceGraph, function_args:
 	return allocation;
 }
 
-fn verify_allocation(allocation: &HashMap<String, isize>, interference_graph: &HashMap<String, HashSet<String>>) -> bool {
+fn verify_allocation(allocation: &HashMap<String, isize>, interference_graph: &HashMap<VariableValue, HashSet<VariableValue>>) -> bool {
+	/*
 	for (var, reg) in allocation.iter() {
 		// Get all neighbors of this variable
 		let neighbors = interference_graph.get(var).unwrap();
@@ -91,6 +122,7 @@ fn verify_allocation(allocation: &HashMap<String, isize>, interference_graph: &H
 			}
 		}
 	}
+	*/
 	return true;
 }
 

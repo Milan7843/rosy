@@ -2,10 +2,11 @@ use std::collections::HashSet;
 
 use crate::tac::TacInstruction;
 use crate::tac::TacValue;
+use crate::tac::VariableValue;
 
-pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<String>> {
+pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<VariableValue>> {
      // Initialize liveness vector with empty sets
-    let mut liveness: Vec<HashSet<String>> = Vec::with_capacity(instructions.len() + 1);
+    let mut liveness: Vec<HashSet<VariableValue>> = Vec::with_capacity(instructions.len() + 1);
 
     // Initialize the last liveness set
     liveness.push(HashSet::new());
@@ -25,7 +26,7 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Strin
             TacInstruction::Push(value) => {
                 match value {
                     TacValue::Variable(var) => {
-                        liveness_before.insert(var.clone());
+                        liveness_before.insert(VariableValue::Variable(var.clone()));
                     }
                     _ => {}
                 }
@@ -36,7 +37,7 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Strin
             TacInstruction::FunctionLabel(name, params) => {
                 // Function entry point: parameters are live
                 for param in params {
-                    liveness_before.remove(param);
+                    liveness_before.remove(&VariableValue::Variable(param.clone()));
                 }
             }
             TacInstruction::Assign(dest, value) => {
@@ -44,7 +45,7 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Strin
                 liveness_before.remove(dest);
                 match value {
                     TacValue::Variable(var) => {
-                        liveness_before.insert(var.clone());
+                        liveness_before.insert(VariableValue::Variable(var.clone()));
                     }
                     _ => {}
                 }
@@ -54,13 +55,13 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Strin
                 liveness_before.remove(dest);
                 match left {
                     TacValue::Variable(var) => {
-                        liveness_before.insert(var.clone());
+                        liveness_before.insert(VariableValue::Variable(var.clone()));
                     }
                     _ => {}
                 }
                 match right {
                     TacValue::Variable(var) => {
-                        liveness_before.insert(var.clone());
+                        liveness_before.insert(VariableValue::Variable(var.clone()));
                     }
                     _ => {}
                 }
@@ -70,7 +71,7 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Strin
                 liveness_before.remove(dest);
                 match value {
                     TacValue::Variable(var) => {
-                        liveness_before.insert(var.clone());
+                        liveness_before.insert(VariableValue::Variable(var.clone()));
                     }
                     _ => {}
                 }
@@ -78,13 +79,13 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Strin
             TacInstruction::CompareAndGoto(left, right, _, _) => {
                 match left {
                     TacValue::Variable(var) => {
-                        liveness_before.insert(var.clone());
+                        liveness_before.insert(VariableValue::Variable(var.clone()));
                     }
                     _ => {}
                 }
                 match right {
                     TacValue::Variable(var) => {
-                        liveness_before.insert(var.clone());
+                        liveness_before.insert(VariableValue::Variable(var.clone()));
                     }
                     _ => {}
                 }
@@ -96,7 +97,7 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Strin
                 if let Some(val) = value {
                     match val {
                         TacValue::Variable(var) => {
-                            liveness_before.insert(var.clone());
+                            liveness_before.insert(VariableValue::Variable(var.clone()));
                         }
                         _ => {}
                     }
@@ -106,27 +107,20 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Strin
                 if let Some(ret_var) = return_var {
                     liveness_before.remove(ret_var);
                 }
-                for arg in args {
-                    match arg {
-                        TacValue::Variable(var) => {
-                            liveness_before.insert(var.clone());
-                        }
-                        _ => {}
-                    }
+                for (arg_index, arg) in args.iter().enumerate() {
+                    liveness_before.insert(arg.clone());
                 }
             }
             TacInstruction::ExternCall(function_name, args, return_var) => {
                 if let Some(ret_var) = return_var {
                     liveness_before.remove(ret_var);
                 }
-                for arg in args {
-                    match arg {
-                        TacValue::Variable(var) => {
-                            liveness_before.insert(var.clone());
-                        }
-                        _ => {}
-                    }
+                for (arg_index, arg) in args.iter().enumerate() {
+                    liveness_before.insert(arg.clone());
                 }
+            }
+            TacInstruction::ProgramStart() => {
+                // Program start does not affect liveness
             }
         }
 
@@ -137,7 +131,7 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Strin
     return liveness;
 }
 
-pub fn print_code_with_liveness(instructions: &Vec<TacInstruction>, liveness: &Vec<HashSet<String>>) {
+pub fn print_code_with_liveness(instructions: &Vec<TacInstruction>, liveness: &Vec<HashSet<VariableValue>>) {
     for (index, instruction) in instructions.iter().enumerate() {
         let live_vars_before = &liveness[index];
         let live_vars_after = &liveness[index+1];

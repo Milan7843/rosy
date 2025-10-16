@@ -10,11 +10,11 @@ use crate::codegenerator::Register;
 use crate::codegenerator::RegisterType;
 use crate::compiler;
 
-pub fn write_exe_file(path: &std::path::PathBuf, machine_code: &mut Vec<u8>, syscalls_to_resolve: &Vec<(String, usize)>) -> std::io::Result<()> {
+pub fn write_exe_file(path: &std::path::PathBuf, machine_code: &mut Vec<u8>, syscalls_to_resolve: &Vec<(String, usize)>, starting_location: usize) -> std::io::Result<()> {
 	let mut file = std::fs::File::create(path)?;
 
 	// Write headers
-	write_headers(&mut file, machine_code, syscalls_to_resolve)?;
+	write_headers(&mut file, machine_code, syscalls_to_resolve, starting_location)?;
 
 	Ok(())
 }
@@ -26,11 +26,12 @@ pub struct ImportEntry {
 	pub function_address_rvas: Vec<u32>, // RVA of the function (filled in later)
 }
 
-fn write_headers(file: &mut File, machine_code: &mut Vec<u8>, syscalls_to_resolve: &Vec<(String, usize)>) -> std::io::Result<()> {
+fn write_headers(file: &mut File, machine_code: &mut Vec<u8>, syscalls_to_resolve: &Vec<(String, usize)>, starting_location: usize) -> std::io::Result<()> {
 	let size_of_code: u32 = 0x200;
 	let size_of_initialized_data: u32 = 0x800;
 	let size_of_uninitialized_data: u32 = 0x00;
-	let adress_of_entry_point: u32 = 0x1000;
+	let adress_of_entry_point: u32 = 0x1000 + starting_location as u32;
+	println!("Entry point at: 0x{:X}", adress_of_entry_point);
 	let base_of_code: u32 = 0x1000;
 	let image_version_major: u16 = 0x00;
 	let image_version_minor: u16 = 0x00;
@@ -265,7 +266,8 @@ fn write_headers(file: &mut File, machine_code: &mut Vec<u8>, syscalls_to_resolv
 		for import in &imports {
 			for (i, func_name) in import.function_names.iter().enumerate() {
 				if *func_name == *syscall_name {
-					let func_rva = import.function_address_rvas[i] - 0x1000;
+					println!("Patching extern call to {} at 0x{:X}", syscall_name, at);
+					let func_rva = import.function_address_rvas[i] - (0x1000 + *at as u32 + 4);
 					write_at_u32(machine_code, *at, func_rva);
 
 					found = true;
@@ -277,7 +279,7 @@ fn write_headers(file: &mut File, machine_code: &mut Vec<u8>, syscalls_to_resolv
 			}
 		}
 		if !found {
-			panic!("Could not find syscall {}", syscall_name);
+			panic!("Could not find extern call {}", syscall_name);
 		}
 	}
 
@@ -309,8 +311,8 @@ fn write_headers(file: &mut File, machine_code: &mut Vec<u8>, syscalls_to_resolv
 
 	// Patch the relative calls
 	write_at_u32(&mut program, 13, get_std_handle_rel32);
-	//write_at_u32(&mut program, 50, write_file_rel32);
-	//write_at_u32(&mut program, 59, exit_process_rel32);
+	write_at_u32(&mut program, 50, write_file_rel32);
+	write_at_u32(&mut program, 59, exit_process_rel32);
 
 	//write_bytes(&mut file_headers, &program2);
 	write_bytes(&mut file_headers, machine_code);

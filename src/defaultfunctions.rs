@@ -6,6 +6,7 @@ use crate::tac::TacFunctionEnvironment;
 use crate::tac::TacInstruction;
 use crate::tac::TacFunction;
 use crate::tac::TacValue;
+use crate::tac::VariableValue;
 
 
 pub fn is_default_function(name: &str) -> bool {
@@ -65,8 +66,8 @@ fn default_print_function(
 	let stdhandle_location_temp = format!("stdhandle{}", temp_counter);
 	*temp_counter += 1;
 
-	instructions.push(TacInstruction::Assign(stdhandle_temp.clone(), TacValue::Constant(-11)));
-	instructions.push(TacInstruction::ExternCall("GetStdHandle".to_string(), vec![TacValue::Variable(stdhandle_temp)], Some(stdhandle_location_temp.clone())));
+	instructions.push(TacInstruction::Assign(VariableValue::VariableWithRequestedRegister(stdhandle_temp.clone(), 0), TacValue::Constant(-11)));
+	instructions.push(TacInstruction::ExternCall("GetStdHandle".to_string(), vec![VariableValue::VariableWithRequestedRegister(stdhandle_temp.clone(), 0)], Some(VariableValue::VariableWithRequestedRegister(stdhandle_location_temp.clone(), 0))));
 
 	// WriteFile
 	let number_of_bytes_temp = format!("numberofbytes{}", temp_counter);
@@ -77,48 +78,27 @@ fn default_print_function(
 	*temp_counter += 1;
 	let stack_offset_temp = format!("stackoffset{}", temp_counter);
 	*temp_counter += 1;
-	// Integer to write
+	// Integer to write: push it onto the stack and save the pointer to it
 	instructions.push(TacInstruction::Push(TacValue::Variable(param_name.clone())));
-	instructions.push(TacInstruction::MovRSPTo(stack_offset_temp.clone()));
+	instructions.push(TacInstruction::MovRSPTo(VariableValue::VariableWithRequestedRegister(stack_offset_temp.clone(), 1)));
 	// Number of bytes to write
-	instructions.push(TacInstruction::Assign(number_of_bytes_temp.clone(), TacValue::Constant(4)));
+	instructions.push(TacInstruction::Assign(VariableValue::VariableWithRequestedRegister(number_of_bytes_temp.clone(), 4), TacValue::Constant(4)));
 	// Pointer to number of bytes written (NULL)
-	instructions.push(TacInstruction::Assign(bytes_written_temp.clone(), TacValue::Constant(0)));
+	instructions.push(TacInstruction::Assign(VariableValue::VariableWithRequestedRegister(bytes_written_temp.clone(), 5), TacValue::Constant(0)));
 	// lpOverlapped (NULL)
-	instructions.push(TacInstruction::Assign(lp_overlapped_temp.clone(), TacValue::Constant(0)));
-
-	let argument_values = vec![
-		TacValue::Variable(stdhandle_location_temp.clone()),
-		TacValue::Variable(stack_offset_temp.clone()),
-		TacValue::Variable(number_of_bytes_temp.clone()),
-		TacValue::Variable(bytes_written_temp.clone()),
-		TacValue::Variable(lp_overlapped_temp.clone()),
-	];
-
-	// Create 4 temporary variables for arguments
-	let mut arg_temps = Vec::new();
-	for (i, arg) in argument_values.iter().enumerate() {
-		println!("Processing argument {}: {:?}", i, arg);
-		if i >= 4 {
-			break; // Only handle up to 4 arguments for now (since they go in registers)
-		}
-		let temp_var = format!("arg{}", temp_counter);
-		*temp_counter += 1;
-		instructions.push(TacInstruction::Assign(temp_var.clone(), arg.clone()));
-		arg_temps.push(TacValue::Variable(temp_var));
-	}
-
+	instructions.push(TacInstruction::Assign(VariableValue::Variable(lp_overlapped_temp.clone()), TacValue::Constant(0)));
+	
 	// Call WriteFile
 	instructions.push(TacInstruction::ExternCall("WriteFile".to_string(), vec![
-		arg_temps[0].clone(),
-		arg_temps[1].clone(),
-		arg_temps[2].clone(),
-		arg_temps[3].clone(),
-		TacValue::Variable(lp_overlapped_temp),
+		VariableValue::VariableWithRequestedRegister(stdhandle_location_temp.clone(), 0),
+		VariableValue::VariableWithRequestedRegister(stack_offset_temp.clone(), 1),
+		VariableValue::VariableWithRequestedRegister(number_of_bytes_temp.clone(), 4),
+		VariableValue::VariableWithRequestedRegister(bytes_written_temp.clone(), 5),
+		VariableValue::Variable(lp_overlapped_temp),
 	], None));
 
 	// Clean up the stack
-	instructions.push(TacInstruction::Pop(param_name));
+	instructions.push(TacInstruction::Pop(VariableValue::Variable(param_name)));
 
 	instructions.push(TacInstruction::Return(None));
 }

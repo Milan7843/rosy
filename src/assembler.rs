@@ -52,15 +52,19 @@ fn resolve_addresses(label_addresses: &HashMap<String, usize>, jumps_to_resolve:
 	}
 }
 
-pub fn assemble(instructions: Vec<Instruction>) -> (Vec<u8>, Vec<(String, usize)>) {
+pub fn assemble(instructions: Vec<Instruction>) -> (Vec<u8>, Vec<(String, usize)>, usize) {
 	let mut machine_code = Vec::new();
 
 	let mut label_addresses: HashMap<String, usize> = std::collections::HashMap::new();
 	let mut jumps_to_resolve: Vec<(String, usize)> = Vec::new();
 	let mut syscalls_to_resolve: Vec<(String, usize)> = Vec::new();
+	let mut starting_point: usize = 0;
  
 	for instr in instructions {
 		match instr {
+			Instruction::ProgramStart => {
+				starting_point = machine_code.len();
+			}
 			Instruction::Label(label) => {
 				// The address of the label is the current length of machine_code
 				label_addresses.insert(label, machine_code.len());
@@ -242,17 +246,13 @@ pub fn assemble(instructions: Vec<Instruction>) -> (Vec<u8>, Vec<(String, usize)
 				write_u8(&mut machine_code, 0xC3); // RET opcode
 			}
 			Instruction::ExternCall(syscall_function) => {
-				// mov rax, imm64
-				write_u8(&mut machine_code, 0x48);
-				write_u8(&mut machine_code, 0xB8);
-
-				// placeholder for the 8-byte absolute function address (will be patched later)
-				let pos = machine_code.len();
-				write_u64(&mut machine_code, 0); // 8 bytes of zero for now
 
 				// call rax
 				write_u8(&mut machine_code, 0xFF);
-				write_u8(&mut machine_code, 0xD0);
+				write_u8(&mut machine_code, 0x15);
+
+				let pos = machine_code.len();
+				write_u32(&mut machine_code, 0); // 8 bytes of zero for now
 
 				// record where to patch the 8-byte immediate and which function to resolve
 				syscalls_to_resolve.push((syscall_function, pos));
@@ -281,7 +281,7 @@ pub fn assemble(instructions: Vec<Instruction>) -> (Vec<u8>, Vec<(String, usize)
 	// Resolve all jumps to their correct addresses
 	resolve_addresses(&label_addresses, &mut jumps_to_resolve, &mut machine_code);
 
-	(machine_code, syscalls_to_resolve)
+	(machine_code, syscalls_to_resolve, starting_point)
 }
 
 fn write_u8(buf: &mut Vec<u8>, value: u8) -> usize {

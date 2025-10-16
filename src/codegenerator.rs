@@ -6,6 +6,7 @@ use crate::tac::BinOp;
 use crate::tac::UnOp;
 use crate::tac::TacInstruction;
 use crate::tac::TacValue;
+use crate::tac::VariableValue;
 use crate::tokenizer::Error;
 
 #[derive(PartialEq, Debug, Clone, Eq, Hash)]
@@ -131,6 +132,7 @@ pub enum Instruction {
 	ExternCall(String), // name of the syscall function (used for IAT)
 	Call(String),   // function name
 	Nop,
+	ProgramStart
 }
 
 fn get_register(variable_name: &String, register_allocation: &HashMap<String, isize>) -> Result<Register, Error> {
@@ -141,11 +143,14 @@ fn get_register(variable_name: &String, register_allocation: &HashMap<String, is
 	}
 }
 
-pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<String, isize>, liveness: &Vec<HashSet<String>>) -> Result<Vec<Instruction>, Error> {
+pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<String, isize>, liveness: &Vec<HashSet<VariableValue>>) -> Result<Vec<Instruction>, Error> {
 	let mut instructions = Vec::new();
 
 	for (instruction_index, tac_inst) in tac.iter().enumerate() {
 		match tac_inst {
+			TacInstruction::ProgramStart() => {
+				instructions.push(Instruction::ProgramStart); // Placeholder for program start
+			}
 			TacInstruction::Label(name) => {
 				instructions.push(Instruction::Label(name.clone()));
 			}
@@ -175,7 +180,12 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				}
 			}
 			TacInstruction::Assign(dest, value) => {
-				let dest_reg = get_register(dest, register_allocation)?;
+				let dest_name = match dest {
+					// If dest has a requested register, use that
+					tac::VariableValue::Variable(name) => name,
+					tac::VariableValue::VariableWithRequestedRegister(name, _) => name,
+				};
+				let dest_reg = get_register(dest_name, register_allocation)?;
 				match value {
 					TacValue::Constant(imm) => {
 						instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Immediate(*imm as i64)));
@@ -190,7 +200,12 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				}
 			}
 			TacInstruction::BinOp(dest, left, op, right) => {
-				let dest_reg = get_register(dest, register_allocation)?;
+				let dest_name = match dest {
+					// If dest has a requested register, use that
+					tac::VariableValue::Variable(name) => name,
+					tac::VariableValue::VariableWithRequestedRegister(name, _) => name,
+				};
+				let dest_reg = get_register(dest_name, register_allocation)?;
 				match (left, right) {
 					// If we want to add two variables into a third, we first move one into the dest register, then add the other
 					(TacValue::Variable(var_left), TacValue::Variable(var_right)) => {
@@ -269,7 +284,12 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				instructions.push(Instruction::Ret);
 			}
 			TacInstruction::UnaryOp(name, operator, operand) => {
-				let dest_reg = get_register(name, register_allocation)?;
+				let dest_name = match name {
+					// If dest has a requested register, use that
+					tac::VariableValue::Variable(name) => name,
+					tac::VariableValue::VariableWithRequestedRegister(name, _) => name,
+				};
+				let dest_reg = get_register(dest_name, register_allocation)?;
 
 				match operand {
 					TacValue::Variable(var) => {
@@ -340,7 +360,12 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				generate_code_for_call(&mut instructions, func_name, args, return_var, register_allocation, liveness, instruction_index, true)?;
 			}
 			TacInstruction::MovRSPTo(var_name) => {
-				let dest_reg = get_register(var_name, register_allocation)?;
+				let dest_name = match var_name {
+					// If dest has a requested register, use that
+					tac::VariableValue::Variable(name) => name,
+					tac::VariableValue::VariableWithRequestedRegister(name, _) => name,
+				};
+				let dest_reg = get_register(dest_name, register_allocation)?;
 				instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Register(Register::General(RegisterType::RSP))));
 			}
 			TacInstruction::Push(value) => {
@@ -358,11 +383,20 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				}
 			}
 			TacInstruction::Pop(var_name) => {
-				let dest_reg = get_register(var_name, register_allocation)?;
+				let dest_name = match var_name {
+					// If dest has a requested register, use that
+					tac::VariableValue::Variable(name) => name,
+					tac::VariableValue::VariableWithRequestedRegister(name, _) => name,
+				};
+				let dest_reg = get_register(dest_name, register_allocation)?;
 				instructions.push(Instruction::Pop(Argument::Register(dest_reg)));
 			}
 		}
 	}
+
+	// Adding the ExitProcess call
+	instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RCX)), Argument::Immediate(0))); // Exit code 0
+	instructions.push(Instruction::ExternCall("ExitProcess".into()));
 
 	ensure_stack_alignment(&mut instructions);
 
@@ -372,10 +406,10 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 fn generate_code_for_call(
 	instructions: &mut Vec<Instruction>,
 	func_name: &String,
-	args: &Vec<TacValue>,
-	return_var: &Option<String>,
+	args: &Vec<VariableValue>,
+	return_var: &Option<tac::VariableValue>,
 	register_allocation: &HashMap<String, isize>,
-	liveness: &Vec<HashSet<String>>,
+	liveness: &Vec<HashSet<VariableValue>>,
 	instruction_index: usize,
 	is_syscall: bool,
 ) -> Result<(), Error> {
@@ -383,11 +417,15 @@ fn generate_code_for_call(
 	let mut saved_registers = Vec::new();
 	if instruction_index < liveness.len() && instruction_index > 0 {
 		// Check which variables are live right before this instruction
-		let live_vars = &liveness[instruction_index-1];
+		let live_vars = &liveness[instruction_index];
 
 		let mut live_registers = HashSet::new();
 		for var in live_vars {
-			if let Some(&reg_num) = register_allocation.get(var) {
+			let var_name = match var {
+				VariableValue::Variable(name) => name,
+				VariableValue::VariableWithRequestedRegister(name, _) => name,
+			};
+			if let Some(&reg_num) = register_allocation.get(var_name) {
 				let reg = to_register(reg_num);
 				if is_caller_saved(&reg) {
 					live_registers.insert(reg);
@@ -399,45 +437,6 @@ fn generate_code_for_call(
 		for reg in live_registers.iter() {
 			instructions.push(Instruction::Push(Argument::Register(reg.clone())));
 			saved_registers.push(reg.clone());
-		}
-	}
-
-	// Move arguments into appropriate registers
-	let arg_registers = [
-		Register::General(RegisterType::RCX),
-		Register::General(RegisterType::RDX),
-		Register::Extended(8),  // r8
-		Register::Extended(9),  // r9
-	];
-
-	for (i, arg) in args.iter().enumerate() {
-		if i < arg_registers.len() {
-			match arg {
-				TacValue::Variable(var) => {
-					let src_reg = get_register(var, register_allocation)?;
-					instructions.push(Instruction::Mov(Argument::Register(arg_registers[i].clone()), Argument::Register(src_reg)));
-				}
-				TacValue::Constant(imm) => {
-					instructions.push(Instruction::Mov(Argument::Register(arg_registers[i].clone()), Argument::Immediate(*imm as i64)));
-				}
-				_ => {
-					return Err(Error::SimpleError{message: format!("Unsupported TacValue in Call argument: {:?}", arg)});
-				}
-			}
-		} else {
-			// Push the rest of the arguments onto the stack (right to left)
-			match arg {
-				TacValue::Variable(var) => {
-					let src_reg = get_register(var, register_allocation)?;
-					instructions.push(Instruction::Push(Argument::Register(src_reg)));
-				}
-				TacValue::Constant(imm) => {
-					instructions.push(Instruction::Push(Argument::Immediate(*imm as i64)));
-				}
-				_ => {
-					return Err(Error::SimpleError{message: format!("Unsupported TacValue in Call argument: {:?}", arg)});
-				}
-			}
 		}
 	}
 	
@@ -456,15 +455,21 @@ fn generate_code_for_call(
 	// Restore the stack pointer
 	instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(40)));
 
-	// Move return value from rax to the appropriate variable, if needed
-	if let Some(ret_var) = return_var {
-		let ret_reg = get_register(ret_var, register_allocation)?;
-		instructions.push(Instruction::Mov(Argument::Register(ret_reg), Argument::Register(Register::General(RegisterType::RAX))));
-	}
 
 	// Restore saved caller-saved registers
 	for reg in saved_registers.iter().rev() {
 		instructions.push(Instruction::Pop(Argument::Register(reg.clone())));
+	}
+
+	// Move return value from rax to the appropriate variable, if needed
+	if let Some(ret_var) = return_var {
+		let ret_name = match ret_var {
+			// If dest has a requested register, use that
+			tac::VariableValue::Variable(name) => name,
+			tac::VariableValue::VariableWithRequestedRegister(name, _) => name,
+		};
+		let ret_reg = get_register(ret_name, register_allocation)?;
+		instructions.push(Instruction::Mov(Argument::Register(ret_reg), Argument::Register(Register::General(RegisterType::RAX))));
 	}
 	Ok(())
 }
@@ -476,8 +481,8 @@ fn ensure_stack_alignment(instructions: &mut Vec<Instruction>) {
 	let instructions_copy = instructions.clone();
 	for (index, instr) in instructions_copy.iter().enumerate() {
 		match instr {
-			Instruction::Push(_) => stack_offset += 8,
-			Instruction::Pop(_) => stack_offset -= 8,
+			Instruction::Push(_) => stack_offset -= 8,
+			Instruction::Pop(_) => stack_offset += 8,
 			Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(imm)) => {
 				stack_offset += *imm;
 			}
@@ -488,6 +493,17 @@ fn ensure_stack_alignment(instructions: &mut Vec<Instruction>) {
 				if stack_offset % 16 == 0 {
 					continue; // Already aligned
 				}
+				print!("Aligning stack before call at instruction {}. Current offset: {}\n", index + instruction_index_offset, stack_offset);
+				let adjustment = (16 - stack_offset.rem_euclid(16)) % 16;
+				instructions.insert(index + instruction_index_offset, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(adjustment)));
+				instructions.insert(index + 2 + instruction_index_offset, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(adjustment)));
+				instruction_index_offset += 2; // Account for the two new instructions
+			}
+			Instruction::ExternCall(_) => {
+				if stack_offset % 16 == 0 {
+					continue; // Already aligned
+				}
+				print!("Aligning stack before extern call at instruction {}. Current offset: {}\n", index + instruction_index_offset, stack_offset);
 				let adjustment = (16 - stack_offset.rem_euclid(16)) % 16;
 				instructions.insert(index + instruction_index_offset, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(adjustment)));
 				instructions.insert(index + 2 + instruction_index_offset, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(adjustment)));
@@ -577,6 +593,9 @@ fn print_instruction(instruction: &Instruction) {
 		}
 		Instruction::Nop => {
 			println!("NOP");
+		}
+		Instruction::ProgramStart => {
+			println!("; Program Start");
 		}
 	}
 }
