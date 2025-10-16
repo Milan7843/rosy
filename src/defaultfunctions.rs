@@ -66,7 +66,7 @@ fn default_print_function(
 	*temp_counter += 1;
 
 	instructions.push(TacInstruction::Assign(stdhandle_temp.clone(), TacValue::Constant(-11)));
-	instructions.push(TacInstruction::SysCall("GetStdHandle".to_string(), vec![TacValue::Variable(stdhandle_temp)], Some(stdhandle_location_temp.clone())));
+	instructions.push(TacInstruction::ExternCall("GetStdHandle".to_string(), vec![TacValue::Variable(stdhandle_temp)], Some(stdhandle_location_temp.clone())));
 
 	// WriteFile
 	let number_of_bytes_temp = format!("numberofbytes{}", temp_counter);
@@ -77,7 +77,6 @@ fn default_print_function(
 	*temp_counter += 1;
 	let stack_offset_temp = format!("stackoffset{}", temp_counter);
 	*temp_counter += 1;
-
 	// Integer to write
 	instructions.push(TacInstruction::Push(TacValue::Variable(param_name.clone())));
 	instructions.push(TacInstruction::MovRSPTo(stack_offset_temp.clone()));
@@ -87,12 +86,34 @@ fn default_print_function(
 	instructions.push(TacInstruction::Assign(bytes_written_temp.clone(), TacValue::Constant(0)));
 	// lpOverlapped (NULL)
 	instructions.push(TacInstruction::Assign(lp_overlapped_temp.clone(), TacValue::Constant(0)));
+
+	let argument_values = vec![
+		TacValue::Variable(stdhandle_location_temp.clone()),
+		TacValue::Variable(stack_offset_temp.clone()),
+		TacValue::Variable(number_of_bytes_temp.clone()),
+		TacValue::Variable(bytes_written_temp.clone()),
+		TacValue::Variable(lp_overlapped_temp.clone()),
+	];
+
+	// Create 4 temporary variables for arguments
+	let mut arg_temps = Vec::new();
+	for (i, arg) in argument_values.iter().enumerate() {
+		println!("Processing argument {}: {:?}", i, arg);
+		if i >= 4 {
+			break; // Only handle up to 4 arguments for now (since they go in registers)
+		}
+		let temp_var = format!("arg{}", temp_counter);
+		*temp_counter += 1;
+		instructions.push(TacInstruction::Assign(temp_var.clone(), arg.clone()));
+		arg_temps.push(TacValue::Variable(temp_var));
+	}
+
 	// Call WriteFile
-	instructions.push(TacInstruction::SysCall("WriteFile".to_string(), vec![
-		TacValue::Variable(stdhandle_location_temp),
-		TacValue::Variable(stack_offset_temp),
-		TacValue::Variable(number_of_bytes_temp),
-		TacValue::Variable(bytes_written_temp),
+	instructions.push(TacInstruction::ExternCall("WriteFile".to_string(), vec![
+		arg_temps[0].clone(),
+		arg_temps[1].clone(),
+		arg_temps[2].clone(),
+		arg_temps[3].clone(),
 		TacValue::Variable(lp_overlapped_temp),
 	], None));
 

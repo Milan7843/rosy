@@ -381,9 +381,9 @@ fn generate_code_for_call(
 ) -> Result<(), Error> {
 	// Check for active caller-saved registers and save them
 	let mut saved_registers = Vec::new();
-	if instruction_index < liveness.len() && instruction_index > 0 {
-		// Check which variables are live right before this instruction
-		let live_vars = &liveness[instruction_index-1];
+	if instruction_index < liveness.len()-1 && instruction_index > 0 {
+		// Check which variables are live right after this instruction
+		let live_vars = &liveness[instruction_index+1];
 
 		let mut live_registers = HashSet::new();
 		for var in live_vars {
@@ -409,9 +409,61 @@ fn generate_code_for_call(
 		Register::Extended(8),  // r8
 		Register::Extended(9),  // r9
 	];
+	let mut arg_regs_live: [bool; 4] = [
+		false, false, false, false
+	];
+	let live_vars = &liveness[instruction_index-1];
+	for var in live_vars {
+		if let Some(&reg_num) = register_allocation.get(var) {
+			let reg = to_register(reg_num);
+			match reg {
+				Register::General(RegisterType::RCX) => arg_regs_live[0] = true,
+				Register::General(RegisterType::RDX) => arg_regs_live[1] = true,
+				Register::Extended(8) => arg_regs_live[2] = true,
+				Register::Extended(9) => arg_regs_live[3] = true,
+				_ => {}
+			}
+		}
+	}
 
+	print!("Arg regs live: ");
+	for live in arg_regs_live.iter() {
+		print!("{} ", live);
+	}
+	println!();
+
+	// First pass: push live argument registers to stack to save them
+	for (i, arg) in args.iter().enumerate() {
+		if i >= 4 {
+			break;
+		}
+
+		// If it's still live, we need to save it
+		if arg_regs_live[i] {
+			print!("Saving arg reg {} ", i);
+			match arg {
+				TacValue::Variable(var) => {
+					let src_reg = get_register(var, register_allocation)?;
+					println!("by pushing {}", src_reg);
+					instructions.push(Instruction::Push(Argument::Register(src_reg)));
+				}
+				TacValue::Constant(imm) => {
+					println!("by pushing {}", imm);
+					instructions.push(Instruction::Push(Argument::Immediate(*imm as i64)));
+				}
+				_ => {
+					return Err(Error::SimpleError{message: format!("Unsupported TacValue in Call argument: {:?}", arg)});
+				}
+			}
+		}
+	}
+
+	// Second pass: move arguments into registers or push onto stack
 	for (i, arg) in args.iter().enumerate() {
 		if i < arg_registers.len() {
+			if arg_regs_live[i] {
+				continue;
+			}
 			match arg {
 				TacValue::Variable(var) => {
 					let src_reg = get_register(var, register_allocation)?;
@@ -424,6 +476,29 @@ fn generate_code_for_call(
 					return Err(Error::SimpleError{message: format!("Unsupported TacValue in Call argument: {:?}", arg)});
 				}
 			}
+		} else {
+			continue;
+		}
+	}
+
+	// Third pass: restore any saved argument registers from stack
+	for (i, arg) in args.iter().enumerate().rev() {
+		if i >= 4 {
+			continue;
+		}
+
+		// If it was still live, we need to restore it
+		if arg_regs_live[i] {
+			println!("Restoring arg reg {}", i);
+			instructions.push(Instruction::Pop(Argument::Register(arg_registers[i].clone())));
+		}
+	}
+
+	// Fourth and final pass: push any stack arguments onto the stack
+	
+	for (i, arg) in args.iter().enumerate() {
+		if i < arg_registers.len() {
+			continue;
 		} else {
 			// Push the rest of the arguments onto the stack (right to left)
 			match arg {
@@ -456,16 +531,17 @@ fn generate_code_for_call(
 	// Restore the stack pointer
 	instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(40)));
 
+	// Restore saved caller-saved registers
+	for reg in saved_registers.iter().rev() {
+		instructions.push(Instruction::Pop(Argument::Register(reg.clone())));
+	}
+
 	// Move return value from rax to the appropriate variable, if needed
 	if let Some(ret_var) = return_var {
 		let ret_reg = get_register(ret_var, register_allocation)?;
 		instructions.push(Instruction::Mov(Argument::Register(ret_reg), Argument::Register(Register::General(RegisterType::RAX))));
 	}
 
-	// Restore saved caller-saved registers
-	for reg in saved_registers.iter().rev() {
-		instructions.push(Instruction::Pop(Argument::Register(reg.clone())));
-	}
 	Ok(())
 }
 

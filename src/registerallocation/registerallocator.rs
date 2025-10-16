@@ -36,7 +36,7 @@ pub fn allocate_registers(interference_graph: &InterferenceGraph, function_args:
 
 	loop {
 		let var_to_allocate = get_highest_saturation_variable(&allocation_network);
-		let var_to_allocate = match var_to_allocate  {
+		let var_to_allocate = match var_to_allocate {
 			Some(v) => v,
 			// We have allocated all variables
 			None => break,

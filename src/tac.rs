@@ -13,7 +13,7 @@ use crate::defaultfunctions;
 
 #[derive(Debug, Clone)]
 pub enum TacInstruction {
-    Assign(String, TacValue),
+    Assign(VariableValue, TacValue),
     BinOp(String, TacValue, BinOp, TacValue),
     UnaryOp(String, UnOp, TacValue),
     Goto(String),
@@ -21,11 +21,17 @@ pub enum TacInstruction {
     Label(String),
     FunctionLabel(String, Vec<String>), // Function entry point label with name and parameter names
     Call(String, Vec<TacValue>, Option<String>),
-    SysCall(String, Vec<TacValue>, Option<String>),
+    ExternCall(String, Vec<TacValue>, Option<String>),
     Return(Option<TacValue>),
     Push(TacValue),
     Pop(String),
     MovRSPTo(String), // Move RSP to the given variable (used for stack management)
+}
+
+#[derive(Debug, Clone)]
+pub enum VariableValue {
+    Variable(String),
+    FunctionArgument(usize), // Index of the argument
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -627,9 +633,22 @@ fn generate_tac_for_rec_expr(
                     Err(e) => return Err(e),
                 };
 
+            // Create up to 4 temporary variables for arguments
+            let mut arg_temps = Vec::new();
+            for (i, arg) in arg_values.iter().enumerate() {
+                println!("Processing argument {}: {:?}", i, arg);
+                if i >= 4 {
+                    break; // Only handle up to 4 arguments for now (since they go in registers)
+                }
+                let temp_var = format!("arg{}", temp_counter);
+                *temp_counter += 1;
+                instructions.push(TacInstruction::Assign(temp_var.clone(), arg.clone()));
+                arg_temps.push(TacValue::Variable(temp_var));
+            }
+
             match return_type {
                 Type::Undefined => {
-                    instructions.push(TacInstruction::Call(function_label, arg_values, None));
+                    instructions.push(TacInstruction::Call(function_label, arg_temps, None));
                     return Ok(TacValue::Variable(
                         "TODO fix undefined return type".to_string(),
                     )); // or some other placeholder for void
@@ -640,7 +659,7 @@ fn generate_tac_for_rec_expr(
                     *temp_counter += 1;
                     instructions.push(TacInstruction::Call(
                         function_label,
-                        arg_values,
+                        arg_temps,
                         Some(temp_var.clone()),
                     ));
                     Ok(TacValue::Variable(temp_var))
@@ -685,9 +704,11 @@ fn generate_binary_op_tac(
 }
 
 fn print_instructions(instructions: &Vec<TacInstruction>) {
+    println!("--- TAC Instructions ---");
     for instr in instructions {
         print_instruction(instr);
     }
+    println!("------------------------");
 }
 
 fn print_instruction(instr: &TacInstruction) {
@@ -747,7 +768,7 @@ fn print_instruction(instr: &TacInstruction) {
                 println!("call {}({:?})", func, args);
             }
         }
-        TacInstruction::SysCall(func, args, ret) => {
+        TacInstruction::ExternCall(func, args, ret) => {
             if let Some(ret_var) = ret {
                 println!("{} = syscall {}({:?})", ret_var, func, args);
             } else {
