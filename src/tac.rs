@@ -10,6 +10,7 @@ use crate::tokenizer::Error;
 use crate::typechecker::FunctionType;
 use crate::typechecker::Type;
 use crate::defaultfunctions;
+use crate::codegenerator::Instruction;
 
 #[derive(Debug, Clone)]
 pub enum TacInstruction {
@@ -27,6 +28,8 @@ pub enum TacInstruction {
     Pop(VariableValue),
     MovRSPTo(VariableValue), // Move RSP to the given variable (used for stack management)
     ProgramStart(),
+    // Direct instructions must be handled with care and never generated from normal code
+    DirectInstruction(Instruction)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -217,8 +220,8 @@ pub fn generate_tac(
         &mut temp_counter,
         &mut label_counter,
     )?;
-    defaultfunctions::add_default_functions(functions, &mut function_env, &mut instructions, &mut temp_counter, &mut label_counter);
 
+    defaultfunctions::add_default_functions(functions, &mut function_env, &mut instructions, &mut temp_counter, &mut label_counter);
 
     instructions.push(TacInstruction::ProgramStart());
     for expr in program {
@@ -734,6 +737,9 @@ fn print_instructions(instructions: &Vec<TacInstruction>) {
 
 fn print_instruction(instr: &TacInstruction) {
     match instr {
+        TacInstruction::DirectInstruction(inner) => {
+            println!("; Direct Instruction: {:?}", inner);
+        }
         TacInstruction::ProgramStart() => {
             println!("; Program Start");
         }

@@ -15,7 +15,7 @@ use crate::registerallocation::variableclassifier;
 use crate::variablecollector;
 
 pub fn compile(
-    mut base_expressions: (Vec<BaseExpr<Type>>, Vec<FunctionType>),
+    base_expressions: (Vec<BaseExpr<Type>>, Vec<FunctionType>),
 ) -> Result<Vec<Instruction>, Error> {
     let tac_instructions = tac::generate_tac(base_expressions.0, base_expressions.1)?;
 

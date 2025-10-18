@@ -21,65 +21,158 @@ pub enum RegisterType {
 	RBP,
 }
 
-#[derive(PartialEq, Debug, Clone, Eq, Hash)]
+#[derive(Debug, Clone, Eq, Hash)]
 pub enum Register {
-	General(RegisterType),
-	Extended(u8),
+	General(RegisterType, RegisterSize),
+	Extended(u8, RegisterSize),
+}
+
+#[derive(PartialEq, Debug, Clone, Eq, Hash)]
+pub enum RegisterSize {
+	Byte, // 8 bit registers like AL, BL
+	Word, // 16 bit registers like AX, BX
+	DoubleWord, // 32 bit registers like EAX, EBX
+	QuadWord, // 64 bit registers like RAX, RBX
 }
 
 impl std::fmt::Display for Register {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		match self {
-				Register::General(reg_type) => {
-					let reg_str = match reg_type {
-						RegisterType::RAX => "rax",
-						RegisterType::RBX => "rbx",
-						RegisterType::RCX => "rcx",
-						RegisterType::RDX => "rdx",
-						RegisterType::RSI => "rsi",
-						RegisterType::RDI => "rdi",
-						RegisterType::RSP => "rsp",
-						RegisterType::RBP => "rbp",
-					};
-					write!(f, "{}", reg_str)
+			Register::General(reg_type, reg_size) => {
+				match reg_size {
+					RegisterSize::Byte => {
+						let reg_str = match reg_type {
+							RegisterType::RAX => "al",
+							RegisterType::RBX => "bl",
+							RegisterType::RCX => "cl",
+							RegisterType::RDX => "dl",
+							RegisterType::RSI => "sil",
+							RegisterType::RDI => "dil",
+							RegisterType::RSP => "spl",
+							RegisterType::RBP => "bpl",
+						};
+						write!(f, "{}", reg_str)
+					}
+					RegisterSize::Word => {
+						let reg_str = match reg_type {
+							RegisterType::RAX => "ax",
+							RegisterType::RBX => "bx",
+							RegisterType::RCX => "cx",
+							RegisterType::RDX => "dx",
+							RegisterType::RSI => "si",
+							RegisterType::RDI => "di",
+							RegisterType::RSP => "sp",
+							RegisterType::RBP => "bp",
+						};
+						write!(f, "{}", reg_str)
+					}
+					RegisterSize::DoubleWord => {
+						let reg_str = match reg_type {
+							RegisterType::RAX => "eax",
+							RegisterType::RBX => "ebx",
+							RegisterType::RCX => "ecx",
+							RegisterType::RDX => "edx",
+							RegisterType::RSI => "esi",
+							RegisterType::RDI => "edi",
+							RegisterType::RSP => "esp",
+							RegisterType::RBP => "ebp",
+						};
+						write!(f, "{}", reg_str)
+					}
+					RegisterSize::QuadWord => {
+						let reg_str = match reg_type {
+							RegisterType::RAX => "rax",
+							RegisterType::RBX => "rbx",
+							RegisterType::RCX => "rcx",
+							RegisterType::RDX => "rdx",
+							RegisterType::RSI => "rsi",
+							RegisterType::RDI => "rdi",
+							RegisterType::RSP => "rsp",
+							RegisterType::RBP => "rbp",
+						};
+						write!(f, "{}", reg_str)
+					}
+				}
 			}
-			Register::Extended(num) => {
-				write!(f, "r{}", num)
+			Register::Extended(num, reg_size) => {
+				match reg_size {
+					RegisterSize::Byte => write!(f, "r{}b", num),
+					RegisterSize::Word => write!(f, "r{}w", num),
+					RegisterSize::DoubleWord => write!(f, "r{}d", num),
+					RegisterSize::QuadWord => write!(f, "r{}", num),
+				}
 			}
+		}
+	}
+}
+
+// Implement equality for register ignoring size
+impl PartialEq for Register {
+	fn eq(&self, other: &Self) -> bool {
+		match (self, other) {
+			(Register::General(reg_type1, _), Register::General(reg_type2, _)) => reg_type1 == reg_type2,
+			(Register::Extended(num1, _), Register::Extended(num2, _)) => num1 == num2,
+			_ => false,
 		}
 	}
 }
 
 fn to_register(reg_num: isize) -> Register {
 	match reg_num {
-		0 => Register::General(RegisterType::RCX),
-		1 => Register::General(RegisterType::RDX),
-		2 => Register::General(RegisterType::RSI),
-		3 => Register::General(RegisterType::RDI),
-		4 => Register::Extended(8),  // r8
-		5 => Register::Extended(9),  // r9
-		6 => Register::Extended(10), // r10
-		7 => Register::General(RegisterType::RBX),
-		8 => Register::Extended(12), // r12
-		9 => Register::Extended(13), // r13
-		10 => Register::Extended(14), // r14
-		-1 => Register::General(RegisterType::RAX),
-		-2 => Register::General(RegisterType::RSP),
-		-3 => Register::General(RegisterType::RBP),
-		-4 => Register::Extended(11), // r11
-		-5 => Register::Extended(15), // r15
+		0 => Register::General(RegisterType::RCX, RegisterSize::QuadWord),
+		1 => Register::General(RegisterType::RDX, RegisterSize::QuadWord),
+		2 => Register::General(RegisterType::RSI, RegisterSize::QuadWord),
+		3 => Register::General(RegisterType::RDI, RegisterSize::QuadWord),
+		4 => Register::Extended(8, RegisterSize::QuadWord),  // r8
+		5 => Register::Extended(9, RegisterSize::QuadWord),  // r9
+		6 => Register::Extended(10, RegisterSize::QuadWord), // r10
+		7 => Register::General(RegisterType::RBX, RegisterSize::QuadWord),
+		8 => Register::Extended(12, RegisterSize::QuadWord), // r12
+		9 => Register::Extended(13, RegisterSize::QuadWord), // r13
+		10 => Register::Extended(14, RegisterSize::QuadWord), // r14
+		-1 => Register::General(RegisterType::RAX, RegisterSize::QuadWord),
+		-2 => Register::General(RegisterType::RSP, RegisterSize::QuadWord),
+		-3 => Register::General(RegisterType::RBP, RegisterSize::QuadWord),
+		-4 => Register::Extended(11, RegisterSize::QuadWord), // r11
+		-5 => Register::Extended(15, RegisterSize::QuadWord), // r15
 		//_ if reg_num > 10 => Register::Extended((reg_num - 10) as u8), // TODO Stack location [rsp + (reg_num - 10) * 8] 
 		_ => panic!("Invalid register number: {}", reg_num),
 	}
 }
 
+pub fn from_register(register: &Register) -> isize {
+	match register {
+		Register::General(reg_type, _) => match reg_type {
+			RegisterType::RCX => 0,
+			RegisterType::RDX => 1,
+			RegisterType::RSI => 2,
+			RegisterType::RDI => 3,
+			RegisterType::RBX => 7,
+			RegisterType::RAX => -1,
+			RegisterType::RSP => -2,
+			RegisterType::RBP => -3,
+		},
+		Register::Extended(num, _) => match num {
+			8 => 4,  // r8
+			9 => 5,  // r9
+			10 => 6, // r10
+			11 => -4, // r11
+			12 => 8, // r12
+			13 => 9, // r13
+			14 => 10, // r14
+			15 => -5, // r15
+			_ => panic!("Invalid extended register number (from_register): {}", num),
+		},
+	}
+}
+
 fn is_caller_saved(register: &Register) -> bool {
 	match register {
-		Register::General(reg_type) => match reg_type {
+		Register::General(reg_type, _) => match reg_type {
 			RegisterType::RAX | RegisterType::RCX | RegisterType::RDX | RegisterType::RSI | RegisterType::RDI => true,
 			RegisterType::RSP | RegisterType::RBP | RegisterType::RBX => false,
 		},
-		Register::Extended(num) => match num {
+		Register::Extended(num, _) => match num {
 			8 | 9 | 10 | 11 => true,  // r8, r9, r10, r11
 			12 | 13 | 14 | 15 => false, // r12, r13, r14, r15
 			_ => panic!("Invalid extended register number (code gen): {}", num),
@@ -92,7 +185,8 @@ pub enum Argument {
 	Register(Register),
 	Immediate(i64),
 	Label(String),
-	MemoryAddress(u64), // e.g., [rax], [rbx + 4]
+	MemoryAddressDirect(u64), // e.g., [rax], [rbx + 4]
+	MemoryAddressRegister(Register)
 }
 
 impl std::fmt::Display for Argument {
@@ -101,7 +195,8 @@ impl std::fmt::Display for Argument {
 			Argument::Register(reg) => write!(f, "{}", reg),
 			Argument::Immediate(value) => write!(f, "{}", value),
 			Argument::Label(name) => write!(f, "{}", name),
-			Argument::MemoryAddress(addr) => write!(f, "[{}]", addr),
+			Argument::MemoryAddressDirect(addr) => write!(f, "[{}]", addr),
+			Argument::MemoryAddressRegister(reg) => write!(f, "[{}]", reg),
 		}
 	}
 }
@@ -112,7 +207,7 @@ pub enum Instruction {
 	Add(Argument, Argument), // dest, src
 	Sub(Argument, Argument), // dest, src
 	Mul(Argument, Argument), // dest, src
-	Div(Argument, Argument), // dest, src
+	Div(Argument, Argument, Argument, Argument), // quotient dest, remainder dest, value src, div src
 	Xor(Argument, Argument), // dest, src
 	And(Argument, Argument), // dest, src
 	Or(Argument, Argument),  // dest, src
@@ -148,6 +243,9 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 
 	for (instruction_index, tac_inst) in tac.iter().enumerate() {
 		match tac_inst {
+			TacInstruction::DirectInstruction(inner) => {
+				instructions.push(inner.clone());
+			}
 			TacInstruction::ProgramStart() => {
 				instructions.push(Instruction::ProgramStart); // Placeholder for program start
 			}
@@ -158,10 +256,10 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				instructions.push(Instruction::Label(name.clone()));
 				// Now we need to move the parameters from their argument registers to their allocated registers
 				let arg_registers = [
-					Register::General(RegisterType::RCX),
-					Register::General(RegisterType::RDX),
-					Register::Extended(8),  // r8
-					Register::Extended(9),  // r9
+					Register::General(RegisterType::RCX, RegisterSize::QuadWord),
+					Register::General(RegisterType::RDX, RegisterSize::QuadWord),
+					Register::Extended(8, RegisterSize::QuadWord),  // r8
+					Register::Extended(9, RegisterSize::QuadWord),  // r9
 				];
 				for (i, param) in params.iter().enumerate() {
 					if let Some(&reg_num) = register_allocation.get(param) {
@@ -172,7 +270,8 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 						} else {
 							// Parameter passed on stack, need to load from [rsp + offset]
 							let stack_offset = ((i - arg_registers.len()) * 8) as u64;
-							instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::MemoryAddress(stack_offset)));
+							// TODO can also just pop this
+							instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::MemoryAddressDirect(stack_offset)));
 						}
 					} else {
 						return Err(Error::SimpleError{message: format!("Function parameter {} not found in register allocation", param)});
@@ -212,26 +311,26 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 						let left_reg = get_register(var_left, register_allocation)?;
 						let right_reg = get_register(var_right, register_allocation)?;
 						// Move left operand to dest register
-						instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Register(left_reg)));
+						instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Register(left_reg.clone())));
 						// Perform operation with right operand
 						match op {
 							BinOp::Add => instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Register(right_reg))),
 							BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Register(right_reg))),
 							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Register(right_reg))),
-							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Register(right_reg))),
+							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(left_reg), Argument::Register(right_reg))),
 							_ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
 						};
 					}
 					(TacValue::Variable(var_left), TacValue::Constant(imm_right)) => {
 						let left_reg = get_register(var_left, register_allocation)?;
 						// Move left operand to dest register
-						instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Register(left_reg)));
+						instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Register(left_reg.clone())));
 						// Perform operation with immediate right operand
 						match op {
 							BinOp::Add => instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
 							BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
 							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
-							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg.clone()), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(left_reg),Argument::Register(dest_reg))),
 							_ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
 						};
 					}
@@ -244,7 +343,7 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 							BinOp::Add => instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Register(right_reg))),
 							BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Register(right_reg))),
 							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Register(right_reg))),
-							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Register(right_reg))),
+							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg.clone()), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(dest_reg), Argument::Register(right_reg))),
 							_ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
 						};
 					}
@@ -256,7 +355,12 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 							BinOp::Add => instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
 							BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
 							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
-							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+							BinOp::Div => {
+								// TODO for division maybe rdx should be saved?
+								// For division, we need to move the left immediate into RAX first
+								instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(*imm_left as i64)));
+								instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(*imm_right as i64)));
+							}
 							_ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
 						};
 					}
@@ -269,10 +373,10 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				match value {
 					Some(TacValue::Variable(var)) => {
 						let ret_reg = get_register(var, register_allocation)?;
-						instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX)), Argument::Register(ret_reg)));
+						instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(ret_reg)));
 					}
 					Some(TacValue::Constant(imm)) => {
-						instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX)), Argument::Immediate(*imm as i64)));
+						instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(*imm as i64)));
 					}
 					None => {
 						// No return value
@@ -366,7 +470,7 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 					tac::VariableValue::VariableWithRequestedRegister(name, _) => name,
 				};
 				let dest_reg = get_register(dest_name, register_allocation)?;
-				instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Register(Register::General(RegisterType::RSP))));
+				instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord))));
 			}
 			TacInstruction::Push(value) => {
 				match value {
@@ -395,7 +499,7 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 	}
 
 	// Adding the ExitProcess call
-	instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RCX)), Argument::Immediate(0))); // Exit code 0
+	instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RCX, RegisterSize::QuadWord)), Argument::Immediate(0))); // Exit code 0
 	instructions.push(Instruction::ExternCall("ExitProcess".into()));
 
 	ensure_stack_alignment(&mut instructions);
@@ -441,7 +545,7 @@ fn generate_code_for_call(
 	}
 	
 	// reserve 32-byte shadow + 8 for alignment
-	instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(40)));
+	instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
 
 	// Call the function
 	if is_syscall {
@@ -453,7 +557,7 @@ fn generate_code_for_call(
 	}
 
 	// Restore the stack pointer
-	instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(40)));
+	instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
 
 
 	// Restore saved caller-saved registers
@@ -469,7 +573,7 @@ fn generate_code_for_call(
 			tac::VariableValue::VariableWithRequestedRegister(name, _) => name,
 		};
 		let ret_reg = get_register(ret_name, register_allocation)?;
-		instructions.push(Instruction::Mov(Argument::Register(ret_reg), Argument::Register(Register::General(RegisterType::RAX))));
+		instructions.push(Instruction::Mov(Argument::Register(ret_reg), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
 	}
 	Ok(())
 }
@@ -483,10 +587,10 @@ fn ensure_stack_alignment(instructions: &mut Vec<Instruction>) {
 		match instr {
 			Instruction::Push(_) => stack_offset -= 8,
 			Instruction::Pop(_) => stack_offset += 8,
-			Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(imm)) => {
+			Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(imm)) => {
 				stack_offset += *imm;
 			}
-			Instruction::Add(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(imm)) => {
+			Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(imm)) => {
 				stack_offset -= *imm;
 			}
 			Instruction::Call(_) => {
@@ -495,8 +599,8 @@ fn ensure_stack_alignment(instructions: &mut Vec<Instruction>) {
 				}
 				print!("Aligning stack before call at instruction {}. Current offset: {}\n", index + instruction_index_offset, stack_offset);
 				let adjustment = (16 - stack_offset.rem_euclid(16)) % 16;
-				instructions.insert(index + instruction_index_offset, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(adjustment)));
-				instructions.insert(index + 2 + instruction_index_offset, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(adjustment)));
+				instructions.insert(index + instruction_index_offset, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(adjustment)));
+				instructions.insert(index + 2 + instruction_index_offset, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(adjustment)));
 				instruction_index_offset += 2; // Account for the two new instructions
 			}
 			Instruction::ExternCall(_) => {
@@ -505,8 +609,8 @@ fn ensure_stack_alignment(instructions: &mut Vec<Instruction>) {
 				}
 				print!("Aligning stack before extern call at instruction {}. Current offset: {}\n", index + instruction_index_offset, stack_offset);
 				let adjustment = (16 - stack_offset.rem_euclid(16)) % 16;
-				instructions.insert(index + instruction_index_offset, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(adjustment)));
-				instructions.insert(index + 2 + instruction_index_offset, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP)), Argument::Immediate(adjustment)));
+				instructions.insert(index + instruction_index_offset, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(adjustment)));
+				instructions.insert(index + 2 + instruction_index_offset, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(adjustment)));
 				instruction_index_offset += 2; // Account for the two new instructions
 			}
 			_ => {}
@@ -523,34 +627,34 @@ pub fn print_instructions(instructions: &Vec<Instruction>) {
 fn print_instruction(instruction: &Instruction) {
 	match instruction {
 		Instruction::Mov(dest, src) => {
-			println!("MOV {}, {}", dest, src);
+			println!("MOV {} <- {}", dest, src);
 		}
 		Instruction::Add(dest, src) => {
-			println!("ADD {}, {}", dest, src);
+			println!("ADD {} + {}", dest, src);
 		}
 		Instruction::Sub(dest, src) => {
-			println!("SUB {}, {}", dest, src);
+			println!("SUB {} - {}", dest, src);
 		}
 		Instruction::Mul(dest, src) => {
-			println!("MUL {}, {}", dest, src);
+			println!("MUL {} * {}", dest, src);
 		}
-		Instruction::Div(dest, src) => {
-			println!("DIV {}, {}", dest, src);
+		Instruction::Div(dest, remainder_dest, value, div) => {
+			println!("DIV {} / {} -> {}, {}", value, div, dest, remainder_dest);
 		}
 		Instruction::Xor(dest, src) => {
 			println!("XOR {}, {}", dest, src);
 		}
 		Instruction::And(dest, src) => {
-			println!("AND {}, {}", dest, src);
+			println!("AND {} & {}", dest, src);
 		}
 		Instruction::Or(dest, src) => {
-			println!("OR {}, {}", dest, src);
+			println!("OR {} | {}", dest, src);
 		}
 		Instruction::Not(src) => {
 			println!("NOT {}", src);
 		}
 		Instruction::Cmp(op1, op2) => {
-			println!("CMP {}, {}", op1, op2);
+			println!("CMP {} =? {}", op1, op2);
 		}
 		Instruction::Jmp(label) => {
 			println!("JMP {:?}", label);

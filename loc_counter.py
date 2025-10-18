@@ -26,7 +26,7 @@ def count_lines_in_directory(directory, excluded_files=None):
     print(f"Total lines: {total_lines}")
 
 # Set the directory path where the files are located
-directory_path = 'tests/'
+directory_path = 'src/'
 
 # Set the list of excluded files
 excluded_files = []

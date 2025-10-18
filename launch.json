@@ -5,20 +5,12 @@
             "name": "(Windows) Launch",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/target/debug/molly.exe",
-            "args": ["src/test.txt"],
+            "program": "${workspaceFolder}/target/debug/rosy.exe",
+            "args": ["compile test.txt"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
             "externalConsole": true
-        },
-        {
-            "name": "(OSX) Launch",
-            "type": "lldb",
-            "request": "launch",
-            "program": "${workspaceFolder}/target/debug/foo",
-            "args": ["src/test.txt"],
-            "cwd": "${workspaceFolder}",
         }
     ]
 }

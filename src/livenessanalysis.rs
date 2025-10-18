@@ -122,6 +122,9 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Varia
             TacInstruction::ProgramStart() => {
                 // Program start does not affect liveness
             }
+            TacInstruction::DirectInstruction(_) => {
+                // Direct instructions may affect liveness, but we don't analyze them here
+            }
         }
 
         liveness.push(liveness_before);
