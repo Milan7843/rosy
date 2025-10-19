@@ -1,2 +1,4 @@
-print(1)
-print(123123)
+a = 0
+for i in 5000000
+	a += 1
+println(a)

@@ -157,6 +157,45 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 							}
 						}
 					}
+					(Argument::MemoryAddressRegister(mar), Argument::Immediate(imm)) => {
+						let size = match mar.clone() {
+							Register::General(_, s) | Register::Extended(_, s) => s,
+						};
+
+						match size {
+							RegisterSize::QuadWord => {
+								// MOV [reg], imm32
+								let rex_b = get_register_is_extended(&mar);
+
+								write_u8(machine_code, get_rex_byte(true, false, false, rex_b)); // REX.W prefix
+								write_u8(machine_code, 0xC7); // MOV r/m64, imm32
+
+								// MOD = 00 (no displacement), REG = 000 (for MOV), R/M = m (base register)
+								let mod_rm = 0b00_000_000 | (0b000 << 3) | get_rm(&mar);
+								write_u8(machine_code, mod_rm);
+
+								// 32-bit immediate
+								write_u32(machine_code, imm as u32);
+							}
+							RegisterSize::Byte => {
+								// MOV [reg], imm8
+								let rex_b = get_register_is_extended(&mar);
+
+								write_u8(machine_code, get_rex_byte(false, false, false, rex_b)); // REX prefix without W
+								write_u8(machine_code, 0xC6); // MOV r/m8, imm8
+
+								// MOD = 00 (no displacement), REG = 000 (for MOV), R/M = m (base register)
+								let mod_rm = 0b00_000_000 | (0b000 << 3) | get_rm(&mar);
+								write_u8(machine_code, mod_rm);
+
+								// 8-bit immediate
+								write_u8(machine_code, imm as u8);
+							}
+							_ => {
+								unimplemented!("Only 64-bit and 8-bit MOV is implemented for MemoryAddressRegister");
+							}
+						}
+					}
 					_ => {
 						// Placeholder for other MOV cases
 						unimplemented!("MOV not implemented yet");

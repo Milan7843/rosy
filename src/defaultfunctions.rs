@@ -39,7 +39,7 @@ pub fn add_default_functions(
 					default_print_int_function(func, function_env, instructions, temp_counter, label_counter);
 				}
 				"println" => {
-					//default_println_function(func, function_env, instructions, temp_counter, label_counter);
+					default_println_int_function(func, function_env, instructions, temp_counter, label_counter);
 				}
 				_ => {}
 			}
@@ -156,7 +156,7 @@ fn default_print_int_function(
 	
 	// Cleanup
 	// Deallocate stack space for the buffer
-	add_direct(instructions, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(64)));
+	add_direct(instructions, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32)));
 	// Pop RDI
 	add_direct(instructions, Instruction::Pop(Argument::Register(Register::General(RegisterType::RDI, RegisterSize::QuadWord))));
 	// Pop RBX
@@ -165,59 +165,117 @@ fn default_print_int_function(
 	add_direct(instructions, Instruction::Ret);
 
 	return;
+}
 
+fn default_println_int_function(
+	func: FunctionType,
+	function_env: &mut TacFunctionEnvironment,
+	instructions: &mut Vec<TacInstruction>,
+	temp_counter: &mut i64,
+	label_counter: &mut i64)
+{
+    let label = format!("func_println_int");
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	let param_name = func.param_names[0].clone();
+	function_env.functions.push(TacFunction {
+		name: "println".to_string(),
+		params: vec![Type::Integer],
+		return_type: Type::Undefined,
+		label: label.clone(),
+	});
 
 	instructions.push(TacInstruction::FunctionLabel(label.clone(), vec![param_name.clone()]));
 
-	// GetStdHandle
-	let stdhandle_temp = new_variable_name("stdhandle", temp_counter);
-	let stdhandle_location_temp = new_variable_name("stdhandle", temp_counter);
+	// Push RBX
+	add_direct(instructions, Instruction::Push(Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord))));
+	// Push RDI
+	add_direct(instructions, Instruction::Push(Argument::Register(Register::General(RegisterType::RDI, RegisterSize::QuadWord))));
+	// Allocate stack space for the buffer
+	add_direct(instructions, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32)));
+	// Get pointer to buffer
+	add_direct(instructions, Instruction::Mov(Argument::Register(Register::General(RegisterType::RDI, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord))));
+	// Add 32 to get the end of the buffer
+	add_direct(instructions, Instruction::Add(Argument::Register(Register::General(RegisterType::RDI, RegisterSize::QuadWord)), Argument::Immediate(32)));
+	// Save the start pointer
+	add_direct(instructions, Instruction::Mov(Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RDI, RegisterSize::QuadWord))));
+	// Find the end of the buffer
+	add_direct(instructions, Instruction::Add(Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord)), Argument::Immediate(16)));
+	// Copy the integer to print to RAX
+	add_direct(instructions, Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RCX, RegisterSize::QuadWord))));
+	// Move the divider into RCX
+	add_direct(instructions, Instruction::Mov(Argument::Register(Register::General(RegisterType::RCX, RegisterSize::QuadWord)), Argument::Immediate(10)));
 
-	instructions.push(TacInstruction::Assign(VariableValue::VariableWithRequestedRegister(stdhandle_temp.clone(), 0), TacValue::Constant(-11)));
-	instructions.push(TacInstruction::ExternCall("GetStdHandle".to_string(), vec![VariableValue::VariableWithRequestedRegister(stdhandle_temp.clone(), 0)], Some(VariableValue::VariableWithRequestedRegister(stdhandle_location_temp.clone(), 0))));
+	let loop_start_label = format!("print_int_loop_start_{}", label_counter);
 
-	// WriteFile
-	let number_of_bytes_temp = new_variable_name("numberofbytes", temp_counter);
-	let bytes_written_temp = new_variable_name("byteswritten", temp_counter);
-	let lp_overlapped_temp = new_variable_name("lpoverlapped", temp_counter);
-	let stack_offset_temp = new_variable_name("stackoffset", temp_counter);
-	// Integer to write: push it onto the stack and save the pointer to it
-	instructions.push(TacInstruction::Push(TacValue::Variable(param_name.clone())));
-	instructions.push(TacInstruction::MovRSPTo(VariableValue::VariableWithRequestedRegister(stack_offset_temp.clone(), 1)));
-	// Number of bytes to write
-	instructions.push(TacInstruction::Assign(VariableValue::VariableWithRequestedRegister(number_of_bytes_temp.clone(), 4), TacValue::Constant(4)));
-	// Pointer to number of bytes written (NULL)
-	instructions.push(TacInstruction::Assign(VariableValue::VariableWithRequestedRegister(bytes_written_temp.clone(), 5), TacValue::Constant(0)));
-	// lpOverlapped (NULL)
-	instructions.push(TacInstruction::Assign(VariableValue::Variable(lp_overlapped_temp.clone()), TacValue::Constant(0)));
+	add_direct(instructions, Instruction::Label(loop_start_label.clone()));
+	*label_counter += 1;
+	// Clear RDX
+	add_direct(instructions, Instruction::Xor(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord))));
+	// Divide RAX by 10
+	add_direct(instructions, Instruction::Div(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RCX, RegisterSize::QuadWord))));
+	// Get the digit of the remainder: add 30 to RDX
+	add_direct(instructions, Instruction::Add(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Immediate(48)));
+	// Decrease RBX to point to the next position: sub rbx, 1
+	add_direct(instructions, Instruction::Sub(Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord)), Argument::Immediate(1)));
+	// Store the digit: mov [rbx], dl
+	add_direct(instructions, Instruction::Mov(Argument::MemoryAddressRegister(Register::General(RegisterType::RBX, RegisterSize::Byte)), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::Byte))));
+	// Check if RAX is zero
+	add_direct(instructions, Instruction::Cmp(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(0)));
+	add_direct(instructions, Instruction::Jne(loop_start_label));
+
+	// Write the newline character
+	// Decrease RBX to point to the next position: sub rbx, 1
+	add_direct(instructions, Instruction::Sub(Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord)), Argument::Immediate(1)));
+	// Store the newline character: mov [rbx], 0xA
+	add_direct(instructions, Instruction::Mov(Argument::MemoryAddressRegister(Register::General(RegisterType::RBX, RegisterSize::Byte)), Argument::Immediate(0xA)));
+
+	// GetStdHandle routine
+	// mov rcx, -11
+	add_direct(instructions, Instruction::Mov(Argument::Register(Register::General(RegisterType::RCX, RegisterSize::QuadWord)), Argument::Immediate(-11)));
+	// setup for call: sub rsp, 40
+	add_direct(instructions, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
+	// call GetStdHandle
+	add_direct(instructions, Instruction::ExternCall("GetStdHandle".to_string()));
+	// add rsp, 40
+	add_direct(instructions, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
+	// Move the buffer start to r8
+	add_direct(instructions, Instruction::Mov(Argument::Register(Register::Extended(8, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RDI, RegisterSize::QuadWord))));
+	// Move the handle to rsi
+	add_direct(instructions, Instruction::Mov(Argument::Register(Register::General(RegisterType::RSI, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+
+	// Compute the string length
+	// move rdx, rdi
+	add_direct(instructions, Instruction::Mov(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RDI, RegisterSize::QuadWord))));
+	// add rdx, 16
+	add_direct(instructions, Instruction::Add(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Immediate(16)));
+	// sub rdx, rbx (length = end - start)
+	add_direct(instructions, Instruction::Sub(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord))));
+	// Now rdx has the length, move it to r8 as the function argument
+	add_direct(instructions, Instruction::Mov(Argument::Register(Register::Extended(8, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord))));
+	// Move the handle into rcx
+	add_direct(instructions, Instruction::Mov(Argument::Register(Register::General(RegisterType::RCX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSI, RegisterSize::QuadWord))));
+	// Move the pointer to the buffer into rdx
+	add_direct(instructions, Instruction::Mov(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord))));
+	// Move 0 into r9 (lpNumberOfBytesWritten)
+	add_direct(instructions, Instruction::Mov(Argument::Register(Register::Extended(9, RegisterSize::QuadWord)), Argument::Immediate(0)));
+
+	// WriteFile call
+	// setup for call: sub rsp, 40
+	add_direct(instructions, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
+	// call WriteFile
+	add_direct(instructions, Instruction::ExternCall("WriteFile".to_string()));
+	// add rsp, 40
+	add_direct(instructions, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
 	
-	// Call WriteFile
-	instructions.push(TacInstruction::ExternCall("WriteFile".to_string(), vec![
-		VariableValue::VariableWithRequestedRegister(stdhandle_location_temp.clone(), 0),
-		VariableValue::VariableWithRequestedRegister(stack_offset_temp.clone(), 1),
-		VariableValue::VariableWithRequestedRegister(number_of_bytes_temp.clone(), 4),
-		VariableValue::VariableWithRequestedRegister(bytes_written_temp.clone(), 5),
-		VariableValue::Variable(lp_overlapped_temp),
-	], None));
+	// Cleanup
+	// Deallocate stack space for the buffer
+	add_direct(instructions, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32)));
+	// Pop RDI
+	add_direct(instructions, Instruction::Pop(Argument::Register(Register::General(RegisterType::RDI, RegisterSize::QuadWord))));
+	// Pop RBX
+	add_direct(instructions, Instruction::Pop(Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord))));
+	// Return
+	add_direct(instructions, Instruction::Ret);
 
-	// Clean up the stack
-	instructions.push(TacInstruction::Pop(VariableValue::Variable(param_name)));
-
-	instructions.push(TacInstruction::Return(None));
+	return;
 }
