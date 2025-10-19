@@ -217,6 +217,48 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 					}
 				}
 			}
+			Instruction::Mul(dest, src) => {
+				match (dest, src) {
+					(Argument::Register(r1), Argument::Register(r2)) => {
+						// First we need to move our first value into RAX
+						let pre_instructions = vec![
+							Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(r1.clone())),
+						];
+						assemble(pre_instructions, machine_code, label_addresses, jumps_to_resolve, syscalls_to_resolve, starting_point);
+
+						// MUL r/m64
+						let rex_b = get_register_is_extended(&r2);
+						write_u8(machine_code, get_rex_byte(true, false, false, rex_b)); // REX.W prefix
+						write_u8(machine_code, 0xF7); // MUL r/m64
+						let mod_rm = 0b11_000_000 | (0b100 << 3) | get_rm(&r2); // MOD=11, REG=100 (MUL), R/M=r2
+						write_u8(machine_code, mod_rm);
+
+						// Move result from RAX back to dest
+						let post_instructions = vec![
+							Instruction::Mov(Argument::Register(r1.clone()), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))),
+						];
+						assemble(post_instructions, machine_code, label_addresses, jumps_to_resolve, syscalls_to_resolve, starting_point);
+					}
+					(Argument::Register(r), Argument::Immediate(imm)) => {
+						let rex_b = get_register_is_extended(&r);
+
+						// REX.W + 0x69 /r id
+						write_u8(machine_code, get_rex_byte(true, false, false, rex_b)); // REX.W prefix
+						write_u8(machine_code, 0x69); // IMUL r64, r/m64, imm32
+
+						// MOD=11 (register-direct), REG=r (dest), R/M=r (source)
+						let mod_rm = 0b11_000_000 | (get_rm(&r) << 3) | get_rm(&r);
+						write_u8(machine_code, mod_rm);
+
+						// 32-bit immediate (sign-extended)
+						write_u32(machine_code, imm as u32);
+					}
+					_ => {
+						// Placeholder for other MUL cases
+						unimplemented!("MUL not implemented yet");
+					}
+				}
+			}
 			Instruction::Sub(dest, src) => {
 				match (dest, src) {
 					(Argument::Register(r1), Argument::Register(r2)) => {

@@ -15,3 +15,4 @@ pub mod uniquify;
 pub mod registerallocation;
 pub mod variablecollector;
 pub mod defaultfunctions;
+pub mod optimiser;

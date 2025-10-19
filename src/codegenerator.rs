@@ -323,12 +323,18 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 					}
 					(TacValue::Variable(var_left), TacValue::Constant(imm_right)) => {
 						let left_reg = get_register(var_left, register_allocation)?;
-						// Move left operand to dest register
-						instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Register(left_reg.clone())));
 						// Perform operation with immediate right operand
 						match op {
-							BinOp::Add => instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
-							BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+							BinOp::Add => {
+								// Move left operand to dest register
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Register(left_reg.clone())));
+								instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64)));
+							}
+							BinOp::Sub => {
+								// Move left operand to dest register
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Register(left_reg.clone())));
+								instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64)));
+							}
 							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
 							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg.clone()), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(left_reg),Argument::Register(dest_reg))),
 							_ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
@@ -336,13 +342,19 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 					}
 					(TacValue::Constant(imm_left), TacValue::Variable(var_right)) => {
 						let right_reg = get_register(var_right, register_allocation)?;
-						// Move left immediate to dest register
-						instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Immediate(*imm_left as i64)));
 						// Perform operation with right operand
 						match op {
-							BinOp::Add => instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Register(right_reg))),
-							BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Register(right_reg))),
-							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Register(right_reg))),
+							BinOp::Add => {
+								// Move left immediate to dest register
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Immediate(*imm_left as i64)));
+								instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Register(right_reg)));
+							}
+							BinOp::Sub => {
+								// Move left immediate to dest register
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Immediate(*imm_left as i64)));
+								instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Register(right_reg)));
+							}
+							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Immediate(*imm_left as i64))),
 							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg.clone()), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(dest_reg), Argument::Register(right_reg))),
 							_ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
 						};

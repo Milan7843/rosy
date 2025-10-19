@@ -12,6 +12,7 @@ use crate::livenessanalysis;
 use crate::compiler;
 use crate::assembler;
 use crate::exewriter;
+use crate::optimiser;
 
 pub fn run_typecheck_pipeline_from_path(path: &std::path::PathBuf) -> Result<String, String> {
     // Read the file into a big string
@@ -127,7 +128,9 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
         }
     };
 
-    let (mut machine_code, syscalls_to_resolve, starting_point) = assembler::assemble_program(assembly);
+    let optimised_assembly = optimiser::optimise_assembly(&assembly);
+
+    let (mut machine_code, syscalls_to_resolve, starting_point) = assembler::assemble_program(optimised_assembly);
 
     println!("Machine code ({} bytes):", machine_code.len());
     for byte in &machine_code {
