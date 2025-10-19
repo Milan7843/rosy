@@ -87,7 +87,8 @@ pub fn main() {
             Err(err) => println!("{err}"),
         },
         Command::Compile { path } => {
-            match pipeline::run_compilation_pipeline_from_path(&path) {
+            let output_path = std::path::PathBuf::from("output.exe");
+            match pipeline::run_compilation_pipeline_from_path(&path, &output_path) {
                 Ok(_) => {}
                 Err(err) => println!("{err}"),
             }

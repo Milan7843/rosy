@@ -80,7 +80,7 @@ pub fn run_pipeline(lines: Vec<&str>) -> Result<interpreter::Terminal, String> {
     return Ok(output_terminal);
 }
 
-pub fn run_compilation_pipeline_from_path(path: &std::path::PathBuf) -> Result<(), String> {
+pub fn run_compilation_pipeline_from_path(path: &std::path::PathBuf, output_path: &std::path::PathBuf) -> Result<(), String> {
     // Read the file into a big string
     let content = std::fs::read_to_string(path).expect("could not read file");
 
@@ -88,10 +88,10 @@ pub fn run_compilation_pipeline_from_path(path: &std::path::PathBuf) -> Result<(
     let lines_iterator = content.split("\n");
     let lines: Vec<&str> = lines_iterator.collect();
 
-    return run_compilation_pipeline(lines);
+    return run_compilation_pipeline(lines, output_path);
 }
 
-pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
+pub fn run_compilation_pipeline(lines: Vec<&str>, output_path: &std::path::PathBuf) -> Result<(), String> {
     let lines_copy = lines.clone();
     let base_expressions: Vec<parser::BaseExpr<()>> = match parser::parse_strings(lines) {
         Ok(base_expressions) => base_expressions,
@@ -137,9 +137,8 @@ pub fn run_compilation_pipeline(lines: Vec<&str>) -> Result<(), String> {
         print!("{:02X} ", byte);
     }
 
-    let path = PathBuf::from("output.exe");
-    match exewriter::write_exe_file(&path, &mut machine_code, &syscalls_to_resolve, starting_point) {
-        Ok(_) => println!("\nCompiled to {}", path.with_extension("exe").display()),
+    match exewriter::write_exe_file(&output_path, &mut machine_code, &syscalls_to_resolve, starting_point) {
+        Ok(_) => println!("\nCompiled to {}", output_path.display()),
         Err(err) => println!("Error writing exe file: {}", err),
     }
 

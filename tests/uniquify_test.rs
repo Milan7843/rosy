@@ -112,6 +112,7 @@ fn test_function() {
             param_types: vec![
                 Integer,
             ],
+            is_used: false,
             return_type: Integer,
             content: vec![
                 BaseExpr {
@@ -151,6 +152,7 @@ fn test_function() {
                     generic_data: Integer,
                 },
             ],
+
         },]);
 
     let expected_output = (vec![BaseExpr {
@@ -207,6 +209,7 @@ fn test_function() {
             param_types: vec![
                 Integer,
             ],
+            is_used: false,
             return_type: Integer,
             content: vec![
                 BaseExpr {
