@@ -290,11 +290,17 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 				match (value, div, dest, remainder_dest) {
 					(Argument::Register(r_value), Argument::Register(r_div), Argument::Register(r_dest), Argument::Register(r_remainder)) => {
 						// Prepare RAX and RDX for division
-						let pre_instructions = vec![
-							Instruction::Push(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord))),
+						let mut pre_instructions:Vec<Instruction> = Vec::new();
+
+						let save_rdx = r_remainder != Register::General(RegisterType::RDX, RegisterSize::QuadWord);
+
+						if save_rdx {
+							pre_instructions.push(Instruction::Push(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord))));
+						}
+						pre_instructions.extend(vec![
 							Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(r_value.clone())),
 							Instruction::Xor(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord))),
-						];
+						]);
 						assemble(pre_instructions, machine_code, label_addresses, jumps_to_resolve, syscalls_to_resolve, starting_point);
 
 						// DIV r/m64
@@ -309,7 +315,8 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 							Instruction::Mov(Argument::Register(r_dest.clone()), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))),
 							Instruction::Mov(Argument::Register(r_remainder.clone()), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord))),
 						];
-						if r_remainder != Register::General(RegisterType::RDX, RegisterSize::QuadWord) {
+						
+						if save_rdx {
 							post_instructions.push(Instruction::Pop(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord))));
 						}
 						assemble(post_instructions, machine_code, label_addresses, jumps_to_resolve, syscalls_to_resolve, starting_point);
@@ -359,6 +366,21 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 						write_u8(machine_code, mod_rm);
 						write_u32(machine_code, imm as u32); // 32-bit immediate
 					}
+					(Argument::Immediate(v1), Argument::Immediate(v2)) => {
+						// To compare two immediates, we can load one into a register and then compare
+						let pre_instructions = vec![
+							Instruction::Push(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))),
+							Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(v1)),
+						];
+						assemble(pre_instructions, machine_code, label_addresses, jumps_to_resolve, syscalls_to_resolve, starting_point);
+
+						// Now compare RAX with the second immediate
+						let cmp_instructions = vec![
+							Instruction::Cmp(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(v2)),
+							Instruction::Pop(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))),
+						];
+						assemble(cmp_instructions, machine_code, label_addresses, jumps_to_resolve, syscalls_to_resolve, starting_point);
+					}
 					_ => {
 						// Placeholder for other CMP cases
 						unimplemented!("CMP not implemented yet");
@@ -380,6 +402,66 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 				// Placeholder for JNE instruction
 				write_u8(machine_code, 0x0F); // Two-byte opcode prefix
 				write_u8(machine_code, 0x85); // JNE opcode
+				let pos = machine_code.len();
+
+				// Placeholder for relative address
+				write_u32(machine_code, 0);
+
+				// This jump still needs its address resolved
+				jumps_to_resolve.push((to_label, pos));
+			}
+			Instruction::Je(to_label) => {
+				// Placeholder for JE instruction
+				write_u8(machine_code, 0x0F); // Two-byte opcode prefix
+				write_u8(machine_code, 0x84); // JE opcode
+				let pos = machine_code.len();
+
+				// Placeholder for relative address
+				write_u32(machine_code, 0);
+
+				// This jump still needs its address resolved
+				jumps_to_resolve.push((to_label, pos));
+			}
+			Instruction::Jg(to_label) => {
+				// Placeholder for JG instruction
+				write_u8(machine_code, 0x0F); // Two-byte opcode prefix
+				write_u8(machine_code, 0x8F); // JG opcode
+				let pos = machine_code.len();
+
+				// Placeholder for relative address
+				write_u32(machine_code, 0);
+
+				// This jump still needs its address resolved
+				jumps_to_resolve.push((to_label, pos));
+			}
+			Instruction::Jge(to_label) => {
+				// Placeholder for JGE instruction
+				write_u8(machine_code, 0x0F); // Two-byte opcode prefix
+				write_u8(machine_code, 0x8D); // JGE opcode
+				let pos = machine_code.len();
+
+				// Placeholder for relative address
+				write_u32(machine_code, 0);
+
+				// This jump still needs its address resolved
+				jumps_to_resolve.push((to_label, pos));
+			}
+			Instruction::Jle(to_label) => {
+				// Placeholder for JLE instruction
+				write_u8(machine_code, 0x0F); // Two-byte opcode prefix
+				write_u8(machine_code, 0x8E); // JLE opcode
+				let pos = machine_code.len();
+
+				// Placeholder for relative address
+				write_u32(machine_code, 0);
+
+				// This jump still needs its address resolved
+				jumps_to_resolve.push((to_label, pos));
+			}
+			Instruction::Jl(to_label) => {
+				// Placeholder for JL instruction
+				write_u8(machine_code, 0x0F); // Two-byte opcode prefix
+				write_u8(machine_code, 0x8C); // JL opcode
 				let pos = machine_code.len();
 
 				// Placeholder for relative address
