@@ -4,19 +4,19 @@ use rosy::pipeline::run_compilation_pipeline;
 
 // Feature test checklist
 // - Addition:
-//   - Two integers
-//   - Two variables
-//   - Variable and integer
+// v  - Two integers
+// v  - Two variables
+// v  - Variable and integer
 //   - Integer and variable
 // - Subtraction:
-//   - Two integers
-//   - Two variables
-//   - Variable and integer
-//   - Integer and variable
+// v  - Two integers
+// v  - Two variables
+// v  - Variable and integer
+// v  - Integer and variable
 // - Multiplication:
-//   - Two integers
-//   - Two variables
-//   - Variable and integer
+// v  - Two integers
+// v  - Two variables
+// v  - Variable and integer
 //   - Integer and variable
 // - Division:
 //   - Two integers
@@ -64,7 +64,7 @@ use rosy::pipeline::run_compilation_pipeline;
 //   - With arithmetic expression
 // - Print statements:
 //   - Print statement with integer
-//   - Print statement with variable
+// v  - Print statement with variable
 //   - Print statement with complex math expression
 //   - Print statement with boolean
 //   - Print statement with string
@@ -98,19 +98,41 @@ use rosy::pipeline::run_compilation_pipeline;
 //   - Return early from function
 //   - Call function several times
 
-
 fn run_and_compare(program: Vec<&str>, expected_output: String) {
-	let output_path = std::path::PathBuf::from("target/debug/output.exe");
+	// create a unique output filename in the temp dir to avoid collisions
+	let mut output_path = std::env::temp_dir();
+	let ext = if cfg!(windows) { ".exe" } else { "" };
+	let unique = format!(
+		"rosy_test_{}_{}",
+		std::process::id(),
+		std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.unwrap()
+			.as_nanos()
+	);
+	output_path.push(format!("{}{}", unique, ext));
 
+	// compile to the unique path
 	match run_compilation_pipeline(program, &output_path) {
 		Ok(_) => {}
 		Err(err) => panic!("Pipeline failed: {}", err),
 	}
 
-	let mut cmd = Command::cargo_bin("output").unwrap();
-	cmd.assert()
-	   .success()
-	   .stdout(expected_output);
+	// run the produced binary, capture output, compare, then clean up the file
+	let exec_output = std::process::Command::new(&output_path)
+		.output()
+		.expect("Failed to execute compiled binary");
+
+	// ensure we remove the file whether the test passes or fails
+	let _ = std::fs::remove_file(&output_path);
+
+	if !exec_output.status.success() {
+		let stderr = String::from_utf8_lossy(&exec_output.stderr);
+		panic!("Compiled binary failed. status: {:?}\nstderr: {}", exec_output.status, stderr);
+	}
+
+	let stdout = String::from_utf8_lossy(&exec_output.stdout).trim().to_string();
+	assert_eq!(stdout, expected_output);
 }
 
 #[test]
@@ -140,6 +162,19 @@ fn simple_print_with_variable_addition() {
 }
 
 #[test]
+fn simple_print_with_variable_and_integer_addition() {
+	let program: Vec<&str> = vec![
+		"a = 1",
+		"c = a + 2",
+		"print(c)"
+	];
+
+	let expected_output = "3";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
 fn print_with_variable_addition() {
 	let program: Vec<&str> = vec![
 		"a = 1",
@@ -155,13 +190,26 @@ fn print_with_variable_addition() {
 #[test]
 fn simple_print_with_variable_multiplication() {
 	let program: Vec<&str> = vec![
-		"a = 1",
+		"a = 3",
 		"b = 2",
 		"c = a * b",
 		"print(c)"
 	];
 
-	let expected_output = "3";
+	let expected_output = "6";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn simple_print_with_variable_and_integer_multiplication() {
+	let program: Vec<&str> = vec![
+		"a = 3",
+		"c = a * 2",
+		"print(c)"
+	];
+
+	let expected_output = "6";
 
 	run_and_compare(program, expected_output.to_string());
 }
@@ -169,12 +217,12 @@ fn simple_print_with_variable_multiplication() {
 #[test]
 fn print_with_variable_multiplication() {
 	let program: Vec<&str> = vec![
-		"a = 1",
+		"a = 3",
 		"b = 2",
 		"print(a * b)"
 	];
 
-	let expected_output = "3";
+	let expected_output = "6";
 
 	run_and_compare(program, expected_output.to_string());
 }
@@ -194,11 +242,37 @@ fn simple_print_with_variable_subtraction() {
 }
 
 #[test]
+fn simple_print_with_variable_and_integer_subtraction() {
+	let program: Vec<&str> = vec![
+		"a = 4",
+		"b = a - 2",
+		"print(b)"
+	];
+
+	let expected_output = "2";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn simple_print_with_integer_and_variable_subtraction() {
+	let program: Vec<&str> = vec![
+		"a = 2",
+		"b = 4 - a",
+		"print(b)"
+	];
+
+	let expected_output = "2";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
 fn print_with_variable_subtraction() {
 	let program: Vec<&str> = vec![
 		"a = 4",
 		"b = 1",
-		"print(a * b)"
+		"print(a - b)"
 	];
 
 	let expected_output = "3";
