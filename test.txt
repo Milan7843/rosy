@@ -1,3 +1,2 @@
-a = 2
-b = 4 - a
-print(b)
+if true
+    print(1)

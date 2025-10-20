@@ -70,15 +70,15 @@ use rosy::pipeline::run_compilation_pipeline;
 //   - Print statement with string
 //   - Print statement with array
 // - If statements:
-//   - If statement with true condition
-//   - If statement with false condition
+// v  - If statement with true condition
+// v  - If statement with false condition
 //   - If statement with variable condition
 //   - If statement with complex condition
-//   - If else statement with true condition
-//   - If else statement with false condition
-//   - Several chained else if statements
-//   - Else statement not hit
-//   - Else statement hit
+// v  - If else statement with true condition
+// v  - If else statement with false condition
+// v  - Several chained else if statements
+// v  - Else statement not hit
+// v  - Else statement hit
 //   - Nested if statements
 // - For loops:
 //   - For loop over range of integers
@@ -279,4 +279,195 @@ fn print_with_variable_subtraction() {
 
 	run_and_compare(program, expected_output.to_string());
 }
+
+#[test]
+fn if_statement_condition_true() {
+	let program: Vec<&str> = vec![
+		"if true",
+		"    print(1)",
+	];
+
+	let expected_output = "1";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn if_statement_condition_false() {
+	let program: Vec<&str> = vec![
+		"if false",
+		"    print(1)",
+	];
+
+	let expected_output = "";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn else_if_statement_condition_true_no_hit() {
+	let program: Vec<&str> = vec![
+		"if true",
+		"    print(1)",
+		"else if true",
+		"    print(2)",
+	];
+
+	let expected_output = "1";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn else_if_statement_condition_true_and_hit() {
+	let program: Vec<&str> = vec![
+		"if false",
+		"    print(1)",
+		"else if true",
+		"    print(2)",
+	];
+
+	let expected_output = "2";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn else_if_statement_condition_false() {
+	let program: Vec<&str> = vec![
+		"if false",
+		"    print(1)",
+		"else if false",
+		"    print(2)",
+	];
+
+	let expected_output = "";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn else_if_third_statement_true() {
+	let program: Vec<&str> = vec![
+		"if false",
+		"    print(1)",
+		"else if false",
+		"    print(2)",
+		"else if true",
+		"    print(3)",
+	];
+
+	let expected_output = "3";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn else_statement_after_if_no_hit() {
+	let program: Vec<&str> = vec![
+		"if true",
+		"    print(1)",
+		"else",
+		"    print(2)",
+	];
+
+	let expected_output = "1";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn else_statement_after_if_hit() {
+	let program: Vec<&str> = vec![
+		"if false",
+		"    print(1)",
+		"else",
+		"    print(2)",
+	];
+
+	let expected_output = "2";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn else_statement_after_else_if_no_hit_1() {
+	let program: Vec<&str> = vec![
+		"if false",
+		"    print(1)",
+		"else if true",
+		"    print(2)",
+		"else",
+		"    print(3)",
+	];
+
+	let expected_output = "2";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn else_statement_after_else_if_no_hit_2() {
+	let program: Vec<&str> = vec![
+		"if true",
+		"    print(1)",
+		"else if true",
+		"    print(2)",
+		"else",
+		"    print(3)",
+	];
+
+	let expected_output = "1";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn else_statement_after_else_if_hit() {
+	let program: Vec<&str> = vec![
+		"if false",
+		"    print(1)",
+		"else if false",
+		"    print(2)",
+		"else",
+		"    print(2)",
+	];
+
+	let expected_output = "2";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn else_if_statement_after_double_else_if() {
+	let program: Vec<&str> = vec![
+		"if false",
+		"    print(1)",
+		"else if false",
+		"    print(2)",
+		"else if false",
+		"    print(3)",
+		"else",
+		"    print(4)",
+	];
+
+	let expected_output = "4";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn if_followed_by_if() {
+	let program: Vec<&str> = vec![
+		"if true",
+		"    print(1)",
+		"if true",
+		"    print(2)",
+	];
+
+	let expected_output = "12";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
 
