@@ -306,31 +306,33 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				};
 				let dest_reg = get_register(dest_name, register_allocation)?;
 				match (left, right) {
-					// If we want to add two variables into a third, we first move one into the dest register, then add the other
+					// If we want to add two variables into a third, we first move one into the rax register, then add the other, then move rax to the destination
 					(TacValue::Variable(var_left), TacValue::Variable(var_right)) => {
 						let left_reg = get_register(var_left, register_allocation)?;
 						let right_reg = get_register(var_right, register_allocation)?;
 						// Move left operand to dest register
-						//instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Register(left_reg.clone())));
+						instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(left_reg.clone())));
 						// Perform operation with right operand
 						match op {
-							BinOp::Add => instructions.push(Instruction::Add(Argument::Register(left_reg.clone()), Argument::Register(right_reg))),
-							BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(left_reg.clone()), Argument::Register(right_reg))),
-							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(left_reg.clone()), Argument::Register(right_reg))),
-							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg.clone()), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(left_reg.clone()), Argument::Register(right_reg))),
+							BinOp::Add => instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(right_reg))),
+							BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(right_reg))),
+							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(right_reg))),
+							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(left_reg.clone()), Argument::Register(right_reg))),
 							_ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
 						};
 						// Move the left operand to dest register
-						instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Register(left_reg)));
+						instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
 					}
 					(TacValue::Variable(var_left), TacValue::Constant(imm_right)) => {
 						let left_reg = get_register(var_left, register_allocation)?;
 						// Perform operation with immediate right operand
 						match op {
 							BinOp::Add => {
-								// Move left operand to dest register
-								instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Register(left_reg.clone())));
-								instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64)));
+								// First move the left register into rax
+								instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(left_reg.clone())));
+								instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(*imm_right as i64)));
+								// Move the result (in rax) to dest register
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
 							}
 							BinOp::Sub => {
 								// Move left operand to dest register

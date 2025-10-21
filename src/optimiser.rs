@@ -29,6 +29,8 @@ pub fn optimise_assembly(assembly: &Vec<Instruction>) -> Vec<Instruction> {
 		}
 	}
 
+	// TODO: remove unnecessary pushes and pops
+
 	println!(
 		"Optimisation complete. Reduced from {} to {} instructions.",
 		assembly.len(),

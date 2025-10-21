@@ -81,9 +81,9 @@ use rosy::pipeline::run_compilation_pipeline;
 // v  - Else statement hit
 //   - Nested if statements
 // - For loops:
-//   - For loop over range of integers
+// v  - For loop over range of integers
 //   - For loop over array
-//   - Nested for loops
+// v  - Nested for loops
 // - Functions: (also check if variables outside function are unaffected)
 //   - Function with no arguments and static return value
 //   - Function with single argument and return value
@@ -183,6 +183,27 @@ fn print_with_variable_addition() {
 	];
 
 	let expected_output = "3";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn simple_print_with_variable_addition_variable_unaffected() {
+	let program: Vec<&str> = vec![
+		"a = 1",
+		"print(a)",
+		"b = a + 1",
+		"print(a)",
+		"c = a + b",
+		"print(a)",
+		"d = 1 + a",
+		"print(a)",
+		"print(b)",
+		"print(c)",
+		"print(d)"
+	];
+
+	let expected_output = "1111232";
 
 	run_and_compare(program, expected_output.to_string());
 }
@@ -470,4 +491,52 @@ fn if_followed_by_if() {
 	run_and_compare(program, expected_output.to_string());
 }
 
+#[test]
+fn for_loop_over_integer_range_zero() {
+	let program: Vec<&str> = vec![
+		"for i in 0",
+		"    print(i)",
+	];
+
+	let expected_output = "";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn for_loop_over_integer_range_one() {
+	let program: Vec<&str> = vec![
+		"for i in 1",
+		"    print(i)",
+	];
+
+	let expected_output = "0";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn for_loop_over_integer_range_five() {
+	let program: Vec<&str> = vec![
+		"for i in 5",
+		"    print(i)",
+	];
+
+	let expected_output = "01234";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn nested_for_loop_over_integer_range() {
+	let program: Vec<&str> = vec![
+		"for i in 3",
+		"    for j in i",
+		"        print(j)",
+	];
+
+	let expected_output = "001";
+
+	run_and_compare(program, expected_output.to_string());
+}
 
