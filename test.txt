@@ -1,12 +1,12 @@
 
 a = 1
-print(a)
+println(a)
 b = a + 1
-print(a)
 c = a + b
-print(a)
 d = 1 + a
-print(a)
-print(b)
-print(c)
-print(d)
+println(5)
+println(6)
+println(a)
+println(b)
+println(c)
+println(d)

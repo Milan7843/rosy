@@ -40,3 +40,13 @@ five()
 x = five() + five()
 x = add(five(), five())
 x = add(add(2, 3), addthree(add(1, 1), 1, timestwo(1)))
+
+a = 1
+println(a)
+b = a + 1
+c = a + b
+d = 1 + a
+println(a)
+println(b)
+println(c)
+println(d)

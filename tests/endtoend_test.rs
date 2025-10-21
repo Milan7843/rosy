@@ -266,11 +266,11 @@ fn simple_print_with_variable_subtraction() {
 fn simple_print_with_variable_and_integer_subtraction() {
 	let program: Vec<&str> = vec![
 		"a = 4",
-		"b = a - 2",
+		"b = a - 3",
 		"print(b)"
 	];
 
-	let expected_output = "2";
+	let expected_output = "1";
 
 	run_and_compare(program, expected_output.to_string());
 }
@@ -278,12 +278,12 @@ fn simple_print_with_variable_and_integer_subtraction() {
 #[test]
 fn simple_print_with_integer_and_variable_subtraction() {
 	let program: Vec<&str> = vec![
-		"a = 2",
+		"a = 1",
 		"b = 4 - a",
 		"print(b)"
 	];
 
-	let expected_output = "2";
+	let expected_output = "3";
 
 	run_and_compare(program, expected_output.to_string());
 }

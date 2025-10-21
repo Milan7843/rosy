@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::codegenerator::*;
+use crate::instructionsimplifier::AssemblyInstruction;
 use crate::exewriter::write_at_bytes;
 
 fn get_rex_byte(w: bool, r: bool, x: bool, b: bool) -> u8 {
@@ -52,7 +53,7 @@ fn resolve_addresses(label_addresses: &HashMap<String, usize>, jumps_to_resolve:
 	}
 }
 
-pub fn assemble_program(instructions: Vec<Instruction>) -> (Vec<u8>, Vec<(String, usize)>, usize) {
+pub fn assemble_program(instructions: Vec<AssemblyInstruction>) -> (Vec<u8>, Vec<(String, usize)>, usize) {
 	let mut machine_code = Vec::new();
 
 	let mut label_addresses: HashMap<String, usize> = std::collections::HashMap::new();
@@ -68,18 +69,17 @@ pub fn assemble_program(instructions: Vec<Instruction>) -> (Vec<u8>, Vec<(String
 	(machine_code, syscalls_to_resolve, starting_point)
 } 
 
-fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_addresses: &mut HashMap<String, usize>, jumps_to_resolve: &mut Vec<(String, usize)>, syscalls_to_resolve: &mut Vec<(String, usize)>, starting_point: &mut usize) {
- 
+fn assemble(instructions: Vec<AssemblyInstruction>, machine_code: &mut Vec<u8>, label_addresses: &mut HashMap<String, usize>, jumps_to_resolve: &mut Vec<(String, usize)>, syscalls_to_resolve: &mut Vec<(String, usize)>, starting_point: &mut usize) {
 	for instr in instructions {
 		match instr {
-			Instruction::ProgramStart => {
+			AssemblyInstruction::ProgramStart => {
 				*starting_point = machine_code.len();
 			}
-			Instruction::Label(label) => {
+			AssemblyInstruction::Label(label) => {
 				// The address of the label is the current length of machine_code
 				label_addresses.insert(label, machine_code.len());
 			}
-			Instruction::Mov(dest, src) => {
+			AssemblyInstruction::Mov(dest, src) => {
 				match (dest, src) {
 					(Argument::Register(r1), Argument::Register(r2)) => {
 						let rex_b = get_register_is_extended(&r1);
@@ -202,7 +202,7 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 					}
 				}
 			}
-			Instruction::Add(dest, src) => {
+			AssemblyInstruction::Add(dest, src) => {
 				match (dest, src) {
 					(Argument::Register(r1), Argument::Register(r2)) => {
 						let rex_b = get_register_is_extended(&r1);
@@ -256,27 +256,18 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 					}
 				}
 			}
-			Instruction::Mul(dest, src) => {
+			AssemblyInstruction::Mul(dest, src) => {
 				match (dest, src) {
 					(Argument::Register(r1), Argument::Register(r2)) => {
-						// First we need to move our first value into RAX
-						let pre_instructions = vec![
-							Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(r1.clone())),
-						];
-						assemble(pre_instructions, machine_code, label_addresses, jumps_to_resolve, syscalls_to_resolve, starting_point);
-
-						// MUL r/m64
 						let rex_b = get_register_is_extended(&r2);
-						write_u8(machine_code, get_rex_byte(true, false, false, rex_b)); // REX.W prefix
-						write_u8(machine_code, 0xF7); // MUL r/m64
-						let mod_rm = 0b11_000_000 | (0b100 << 3) | get_rm(&r2); // MOD=11, REG=100 (MUL), R/M=r2
-						write_u8(machine_code, mod_rm);
+						let rex_r = get_register_is_extended(&r1);
 
-						// Move result from RAX back to dest
-						let post_instructions = vec![
-							Instruction::Mov(Argument::Register(r1.clone()), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))),
-						];
-						assemble(post_instructions, machine_code, label_addresses, jumps_to_resolve, syscalls_to_resolve, starting_point);
+						write_u8(machine_code, get_rex_byte(true, rex_r, false, rex_b)); // REX.W prefix
+						write_u8(machine_code, 0x0F); // Two-byte opcode prefix
+						write_u8(machine_code, 0xAF); // IMUL r64, r/m64
+
+						let mod_rm = 0b11_000_000 | (get_rm(&r1) << 3) | get_rm(&r2);
+						write_u8(machine_code, mod_rm);
 					}
 					(Argument::Register(r), Argument::Immediate(imm)) => {
 						let rex_b = get_register_is_extended(&r);
@@ -298,7 +289,7 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 					}
 				}
 			}
-			Instruction::Sub(dest, src) => {
+			AssemblyInstruction::Sub(dest, src) => {
 				match (dest, src) {
 					(Argument::Register(r1), Argument::Register(r2)) => {
 						let rex_b = get_register_is_extended(&r1);
@@ -325,40 +316,15 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 					}
 				}
 			}
-			Instruction::Div(dest, remainder_dest, value, div) => {
-				match (value, div, dest, remainder_dest) {
-					(Argument::Register(r_value), Argument::Register(r_div), Argument::Register(r_dest), Argument::Register(r_remainder)) => {
-						// Prepare RAX and RDX for division
-						let mut pre_instructions:Vec<Instruction> = Vec::new();
-
-						let save_rdx = r_remainder != Register::General(RegisterType::RDX, RegisterSize::QuadWord);
-
-						if save_rdx {
-							pre_instructions.push(Instruction::Push(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord))));
-						}
-						pre_instructions.extend(vec![
-							Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(r_value.clone())),
-							Instruction::Xor(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord))),
-						]);
-						assemble(pre_instructions, machine_code, label_addresses, jumps_to_resolve, syscalls_to_resolve, starting_point);
-
+			AssemblyInstruction::Div(source) => {
+				match source {
+					Argument::Register(r_value) => {
 						// DIV r/m64
-						let rex_b = get_register_is_extended(&r_div);
+						let rex_b = get_register_is_extended(&r_value);
 						write_u8(machine_code, get_rex_byte(true, false, false, rex_b)); // REX.W prefix
 						write_u8(machine_code, 0xF7); // DIV r/m64
-						let mod_rm = 0b11_000_000 | (0b110 << 3) | get_rm(&r_div); // MOD=11, REG=110 (DIV), R/M=r_div
+						let mod_rm = 0b11_000_000 | (0b110 << 3) | get_rm(&r_value); // MOD=11, REG=110 (DIV), R/M=r_value
 						write_u8(machine_code, mod_rm);
-
-						// Move quotient from RAX to dest
-						let mut post_instructions = vec![
-							Instruction::Mov(Argument::Register(r_dest.clone()), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))),
-							Instruction::Mov(Argument::Register(r_remainder.clone()), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord))),
-						];
-						
-						if save_rdx {
-							post_instructions.push(Instruction::Pop(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord))));
-						}
-						assemble(post_instructions, machine_code, label_addresses, jumps_to_resolve, syscalls_to_resolve, starting_point);
 					}
 					_ => {
 						// Placeholder for other DIV cases
@@ -366,7 +332,7 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 					}
 				}
 			}
-			Instruction::Xor(dest, src) => {
+			AssemblyInstruction::Xor(dest, src) => {
 				match (dest, src) {
 					(Argument::Register(r1), Argument::Register(r2)) => {
 						let rex_b = get_register_is_extended(&r1);
@@ -384,7 +350,7 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 					}
 				}
 			}
-			Instruction::Cmp(arg1, arg2) => {
+			AssemblyInstruction::Cmp(arg1, arg2) => {
 				match (arg1, arg2) {
 					(Argument::Register(r1), Argument::Register(r2)) => {
 						let rex_b = get_register_is_extended(&r1);
@@ -405,28 +371,13 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 						write_u8(machine_code, mod_rm);
 						write_u32(machine_code, imm as u32); // 32-bit immediate
 					}
-					(Argument::Immediate(v1), Argument::Immediate(v2)) => {
-						// To compare two immediates, we can load one into a register and then compare
-						let pre_instructions = vec![
-							Instruction::Push(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))),
-							Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(v1)),
-						];
-						assemble(pre_instructions, machine_code, label_addresses, jumps_to_resolve, syscalls_to_resolve, starting_point);
-
-						// Now compare RAX with the second immediate
-						let cmp_instructions = vec![
-							Instruction::Cmp(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(v2)),
-							Instruction::Pop(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))),
-						];
-						assemble(cmp_instructions, machine_code, label_addresses, jumps_to_resolve, syscalls_to_resolve, starting_point);
-					}
 					_ => {
 						// Placeholder for other CMP cases
 						unimplemented!("CMP not implemented yet");
 					}
 				}
 			}
-			Instruction::Jmp(to_label) => {
+			AssemblyInstruction::Jmp(to_label) => {
 				// Placeholder for JMP instruction
 				write_u8(machine_code, 0xE9); // JMP opcode
 				let pos = machine_code.len();
@@ -437,7 +388,7 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 				// This jump still needs its address resolved
 				jumps_to_resolve.push((to_label, pos));
 			}
-			Instruction::Jne(to_label) => {
+			AssemblyInstruction::Jne(to_label) => {
 				// Placeholder for JNE instruction
 				write_u8(machine_code, 0x0F); // Two-byte opcode prefix
 				write_u8(machine_code, 0x85); // JNE opcode
@@ -449,7 +400,7 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 				// This jump still needs its address resolved
 				jumps_to_resolve.push((to_label, pos));
 			}
-			Instruction::Je(to_label) => {
+			AssemblyInstruction::Je(to_label) => {
 				// Placeholder for JE instruction
 				write_u8(machine_code, 0x0F); // Two-byte opcode prefix
 				write_u8(machine_code, 0x84); // JE opcode
@@ -461,7 +412,7 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 				// This jump still needs its address resolved
 				jumps_to_resolve.push((to_label, pos));
 			}
-			Instruction::Jg(to_label) => {
+			AssemblyInstruction::Jg(to_label) => {
 				// Placeholder for JG instruction
 				write_u8(machine_code, 0x0F); // Two-byte opcode prefix
 				write_u8(machine_code, 0x8F); // JG opcode
@@ -473,7 +424,7 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 				// This jump still needs its address resolved
 				jumps_to_resolve.push((to_label, pos));
 			}
-			Instruction::Jge(to_label) => {
+			AssemblyInstruction::Jge(to_label) => {
 				// Placeholder for JGE instruction
 				write_u8(machine_code, 0x0F); // Two-byte opcode prefix
 				write_u8(machine_code, 0x8D); // JGE opcode
@@ -485,7 +436,7 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 				// This jump still needs its address resolved
 				jumps_to_resolve.push((to_label, pos));
 			}
-			Instruction::Jle(to_label) => {
+			AssemblyInstruction::Jle(to_label) => {
 				// Placeholder for JLE instruction
 				write_u8(machine_code, 0x0F); // Two-byte opcode prefix
 				write_u8(machine_code, 0x8E); // JLE opcode
@@ -497,7 +448,7 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 				// This jump still needs its address resolved
 				jumps_to_resolve.push((to_label, pos));
 			}
-			Instruction::Jl(to_label) => {
+			AssemblyInstruction::Jl(to_label) => {
 				// Placeholder for JL instruction
 				write_u8(machine_code, 0x0F); // Two-byte opcode prefix
 				write_u8(machine_code, 0x8C); // JL opcode
@@ -509,7 +460,7 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 				// This jump still needs its address resolved
 				jumps_to_resolve.push((to_label, pos));
 			}
-			Instruction::Push(argument) => {
+			AssemblyInstruction::Push(argument) => {
 				match argument {
 					Argument::Register(r) => {
 						let rex_b = get_register_is_extended(&r);
@@ -532,7 +483,7 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 					}
 				}
 			}
-			Instruction::Pop(argument) => {
+			AssemblyInstruction::Pop(argument) => {
 				match argument {
 					Argument::Register(r) => {
 						let rex_b = get_register_is_extended(&r);
@@ -546,10 +497,10 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 					}
 				}
 			}
-			Instruction::Ret => {
+			AssemblyInstruction::Ret => {
 				write_u8(machine_code, 0xC3); // RET opcode
 			}
-			Instruction::ExternCall(syscall_function) => {
+			AssemblyInstruction::ExternCall(syscall_function) => {
 
 				// call rax
 				write_u8(machine_code, 0xFF);
@@ -561,10 +512,10 @@ fn assemble(instructions: Vec<Instruction>, machine_code: &mut Vec<u8>, label_ad
 				// record where to patch the 8-byte immediate and which function to resolve
 				syscalls_to_resolve.push((syscall_function, pos));
 			}
-			Instruction::Nop => {
+			AssemblyInstruction::Nop => {
 				machine_code.push(0x90); // NOP opcode
 			}
-			Instruction::Call(func_name) => {
+			AssemblyInstruction::Call(func_name) => {
 				// Placeholder for CALL instruction
 				write_u8(machine_code, 0xE8); // CALL opcode
 				let pos = machine_code.len();
