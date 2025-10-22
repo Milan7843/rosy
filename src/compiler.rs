@@ -32,11 +32,11 @@ pub fn compile(
 
     let register_allocation = registerallocator::allocate_registers(&interference_graph, &function_arguments);
 
-    let instructions = codegenerator::generate_code(&tac_instructions, &register_allocation, &liveness)?;
+    let mut instructions = codegenerator::generate_code(&tac_instructions, &register_allocation, &liveness)?;
 
     codegenerator::print_instructions(&instructions);
 
-    let assembly_instructions = instructionsimplifier::to_assembly_instructions(&instructions);
+    let assembly_instructions = instructionsimplifier::to_assembly_instructions(&mut instructions);
 
     instructionsimplifier::print_assembly_instructions(&assembly_instructions);
 

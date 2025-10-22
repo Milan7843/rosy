@@ -249,6 +249,27 @@ fn print_with_variable_multiplication() {
 }
 
 #[test]
+fn simple_print_with_variable_multiplication_variable_unaffected() {
+	let program: Vec<&str> = vec![
+		"a = 3",
+		"print(a)",
+		"b = a * 2",
+		"print(a)",
+		"c = a * b",
+		"print(a)",
+		"d = 5 * a",
+		"print(a)",
+		"print(b)",
+		"print(c)",
+		"print(d)"
+	];
+
+	let expected_output = "333361215";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
 fn simple_print_with_variable_subtraction() {
 	let program: Vec<&str> = vec![
 		"a = 4",
@@ -297,6 +318,27 @@ fn print_with_variable_subtraction() {
 	];
 
 	let expected_output = "3";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn simple_print_with_variable_subtraction_variable_unaffected() {
+	let program: Vec<&str> = vec![
+		"a = 3",
+		"print(a)",
+		"b = a - 2",
+		"print(a)",
+		"c = a - b",
+		"print(a)",
+		"d = 7 - a",
+		"print(a)",
+		"print(b)",
+		"print(c)",
+		"print(d)"
+	];
+
+	let expected_output = "3333124";
 
 	run_and_compare(program, expected_output.to_string());
 }
@@ -536,6 +578,188 @@ fn nested_for_loop_over_integer_range() {
 	];
 
 	let expected_output = "001";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn boolean_true_literal() {
+	let program: Vec<&str> = vec![
+		"a = true",
+		"if a",
+		"    print(1)",
+	];
+
+	let expected_output = "1";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn boolean_false_literal() {
+	let program: Vec<&str> = vec![
+		"a = false",
+		"if a",
+		"    print(1)",
+	];
+
+	let expected_output = "";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn boolean_and_false_false() {
+	let program: Vec<&str> = vec![
+		"a = false and false",
+		"if a",
+		"    print(1)",
+	];
+
+	let expected_output = "";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn boolean_and_false_true() {
+	let program: Vec<&str> = vec![
+		"a = false and true",
+		"if a",
+		"    print(1)",
+	];
+
+	let expected_output = "";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn boolean_and_true_false() {
+	let program: Vec<&str> = vec![
+		"a = true and false",
+		"if a",
+		"    print(1)",
+	];
+
+	let expected_output = "";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn boolean_and_true_true() {
+	let program: Vec<&str> = vec![
+		"a = true and true",
+		"if a",
+		"    print(1)",
+	];
+
+	let expected_output = "1";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn boolean_or_false_false() {
+	let program: Vec<&str> = vec![
+		"a = false or false",
+		"if a",
+		"    print(1)",
+	];
+
+	let expected_output = "";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn boolean_or_false_true() {
+	let program: Vec<&str> = vec![
+		"a = false or true",
+		"if a",
+		"    print(1)",
+	];
+
+	let expected_output = "1";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn boolean_or_true_false() {
+	let program: Vec<&str> = vec![
+		"a = true or false",
+		"if a",
+		"    print(1)",
+	];
+
+	let expected_output = "1";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn boolean_or_true_true() {
+	let program: Vec<&str> = vec![
+		"a = true or true",
+		"if a",
+		"    print(1)",
+	];
+
+	let expected_output = "1";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn boolean_xor_false_false() {
+	let program: Vec<&str> = vec![
+		"a = false xor false",
+		"if a",
+		"    print(1)",
+	];
+
+	let expected_output = "";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn boolean_xor_false_true() {
+	let program: Vec<&str> = vec![
+		"a = false xor true",
+		"if a",
+		"    print(1)",
+	];
+
+	let expected_output = "1";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn boolean_xor_true_false() {
+	let program: Vec<&str> = vec![
+		"a = true xor false",
+		"if a",
+		"    print(1)",
+	];
+
+	let expected_output = "1";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn boolean_xor_true_true() {
+	let program: Vec<&str> = vec![
+		"a = true xor true",
+		"if a",
+		"    print(1)",
+	];
+
+	let expected_output = "1";
 
 	run_and_compare(program, expected_output.to_string());
 }

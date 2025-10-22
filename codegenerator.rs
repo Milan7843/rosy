@@ -204,6 +204,9 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 							BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Register(right_reg))),
 							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Register(right_reg))),
 							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Register(right_reg))),
+							BinOp::And => instructions.push(Instruction::And(Argument::Register(dest_reg), Argument::Register(right_reg))),
+							BinOp::Or => instructions.push(Instruction::Or(Argument::Register(dest_reg), Argument::Register(right_reg))),
+							BinOp::Xor => instructions.push(Instruction::Xor(Argument::Register(dest_reg), Argument::Register(right_reg))),
 							_ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
 						};
 					}
@@ -217,6 +220,9 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 							BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
 							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
 							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+							BinOp::And => instructions.push(Instruction::And(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+							BinOp::Or => instructions.push(Instruction::Or(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+							BinOp::Xor => instructions.push(Instruction::Xor(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
 							_ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
 						};
 					}
@@ -230,6 +236,9 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 							BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Register(right_reg))),
 							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Register(right_reg))),
 							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Register(right_reg))),
+							BinOp::And => instructions.push(Instruction::And(Argument::Register(dest_reg), Argument::Register(right_reg))),
+							BinOp::Or => instructions.push(Instruction::Or(Argument::Register(dest_reg), Argument::Register(right_reg))),
+							BinOp::Xor => instructions.push(Instruction::Xor(Argument::Register(dest_reg), Argument::Register(right_reg))),
 							_ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
 						};
 					}
@@ -242,6 +251,9 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 							BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
 							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
 							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+							BinOp::And => instructions.push(Instruction::And(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+							BinOp::Or => instructions.push(Instruction::Or(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+							BinOp::Xor => instructions.push(Instruction::Xor(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
 							_ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
 						};
 					}

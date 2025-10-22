@@ -1,4 +1,5 @@
 use core::num;
+use std::usize;
 
 use crate::tac::BinOp;
 use crate::typechecker::FunctionType;
@@ -122,7 +123,10 @@ fn default_print_int_function(
 	// setup for call: sub rsp, 40
 	add_direct(instructions, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
 	// call GetStdHandle
+	add_direct(instructions, Instruction::PreCallStackAlign(*label_counter as usize));
 	add_direct(instructions, Instruction::ExternCall("GetStdHandle".to_string()));
+	add_direct(instructions, Instruction::PostCallStackAlign(*label_counter as usize));
+	*label_counter += 1;
 	// add rsp, 40
 	add_direct(instructions, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
 	// Move the buffer start to r8
@@ -150,7 +154,10 @@ fn default_print_int_function(
 	// setup for call: sub rsp, 40
 	add_direct(instructions, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
 	// call WriteFile
+	add_direct(instructions, Instruction::PreCallStackAlign(*label_counter as usize));
 	add_direct(instructions, Instruction::ExternCall("WriteFile".to_string()));
+	add_direct(instructions, Instruction::PostCallStackAlign(*label_counter as usize));
+	*label_counter += 1;
 	// add rsp, 40
 	add_direct(instructions, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
 	
@@ -235,7 +242,10 @@ fn default_println_int_function(
 	// setup for call: sub rsp, 40
 	add_direct(instructions, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
 	// call GetStdHandle
+	add_direct(instructions, Instruction::PreCallStackAlign(*label_counter as usize));
 	add_direct(instructions, Instruction::ExternCall("GetStdHandle".to_string()));
+	add_direct(instructions, Instruction::PostCallStackAlign(*label_counter as usize));
+	*label_counter += 1;
 	// add rsp, 40
 	add_direct(instructions, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
 	// Move the buffer start to r8
@@ -263,7 +273,10 @@ fn default_println_int_function(
 	// setup for call: sub rsp, 40
 	add_direct(instructions, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
 	// call WriteFile
+	add_direct(instructions, Instruction::PreCallStackAlign(*label_counter as usize));
 	add_direct(instructions, Instruction::ExternCall("WriteFile".to_string()));
+	add_direct(instructions, Instruction::PostCallStackAlign(*label_counter as usize));
+	*label_counter += 1;
 	// add rsp, 40
 	add_direct(instructions, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
 	

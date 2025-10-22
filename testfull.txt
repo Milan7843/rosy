@@ -45,8 +45,7 @@ a = 1
 println(a)
 b = a + 1
 c = a + b
-d = 1 + a
-println(a)
-println(b)
-println(c)
-println(d)
+println(5)
+println(a+2)
+d = b
+d = c

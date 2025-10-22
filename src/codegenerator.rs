@@ -710,6 +710,8 @@ fn ensure_stack_alignment(instructions: &mut Vec<Instruction>) {
 			}
 			_ => {}
 		}
+		print_instruction(instr);
+		println!("Stack offset: {}", stack_offset);
 	}
 }
 

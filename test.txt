@@ -1,12 +1,3 @@
-
-a = 1
-println(a)
-b = a + 1
-c = a + b
-d = 1 + a
-println(5)
-println(6)
-println(a)
-println(b)
-println(c)
-println(d)
+a = true and false
+if a
+	print(1)
