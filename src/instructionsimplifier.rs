@@ -321,7 +321,7 @@ pub fn to_assembly_instructions(instructions: &Vec<Instruction>) -> Vec<Assembly
 			Instruction::Ret => assembly_instructions.push(AssemblyInstruction::Ret),
 			Instruction::Push(arg) => assembly_instructions.push(AssemblyInstruction::Push(arg.clone())),
 			Instruction::Pop(arg) => assembly_instructions.push(AssemblyInstruction::Pop(arg.clone())),
-			Instruction::Label(name) => assembly_instructions.push(AssemblyInstruction::Label(name.clone())),
+			Instruction::Label(name, _) => assembly_instructions.push(AssemblyInstruction::Label(name.clone())),
 			Instruction::ExternCall(name) => assembly_instructions.push(AssemblyInstruction::ExternCall(name.clone())),
 			Instruction::Call(name) => assembly_instructions.push(AssemblyInstruction::Call(name.clone())),
 			Instruction::Nop => assembly_instructions.push(AssemblyInstruction::Nop),

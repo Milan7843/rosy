@@ -224,7 +224,7 @@ pub enum Instruction {
 	Ret,
 	Push(Argument), // value or register
 	Pop(Argument),  // register
-	Label(String),  // label name
+	Label(String, Option<usize>),  // label name, optional number of stack-passed arguments (for a function, required for stack cleanup)
 	ExternCall(String), // name of the syscall function (used for IAT)
 	Call(String),   // function name
 	Nop,
@@ -253,10 +253,9 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				instructions.push(Instruction::ProgramStart); // Placeholder for program start
 			}
 			TacInstruction::Label(name) => {
-				instructions.push(Instruction::Label(name.clone()));
+				instructions.push(Instruction::Label(name.clone(), None));
 			}
 			TacInstruction::FunctionLabel(name, params) => {
-				instructions.push(Instruction::Label(name.clone()));
 				// Now we need to move the parameters from their argument registers to their allocated registers
 				let arg_registers = [
 					Register::General(RegisterType::RCX, RegisterSize::QuadWord),
@@ -264,6 +263,14 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 					Register::Extended(8, RegisterSize::QuadWord),  // r8
 					Register::Extended(9, RegisterSize::QuadWord),  // r9
 				];
+
+				let num_stack_passed_args = if params.len() > arg_registers.len() {
+					params.len() - arg_registers.len()
+				} else {
+					0
+				};
+
+				instructions.push(Instruction::Label(name.clone(), if num_stack_passed_args == 0 { None } else { Some(num_stack_passed_args) }));
 
 				let num_register_params = std::cmp::min(params.len(), arg_registers.len());
 
@@ -298,10 +305,7 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Register(arg_registers[i].clone())));
 							}
 						} else {
-							// Parameter passed on stack, need to load from [rsp + offset]
-							let stack_offset = ((i - arg_registers.len()) * 8) as u64;
-							// TODO can also just pop this
-							instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::MemoryAddressDirect(stack_offset)));
+							break;
 						}
 					} else {
 						return Err(Error::SimpleError{message: format!("Function parameter {} not found in register allocation", param)});
@@ -315,6 +319,33 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 						}
 						pushed_arguments_to_recover.clear();
 					}
+				}
+
+				// TODO: use relative memory addressing for this
+
+				// Before popping, add 8 bytes to skip the return address
+				instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(8)));
+
+				// Recover any arguments passed on the stack
+				for (i, param) in params.iter().enumerate() {
+					if i < arg_registers.len() {
+						continue;
+					}
+
+					if let Some(&reg_num) = register_allocation.get(param) {
+						let dest_reg = to_register(reg_num);
+						// Move from stack to allocated register
+						instructions.push(Instruction::Pop(Argument::Register(dest_reg)));
+
+					} else {
+						return Err(Error::SimpleError{message: format!("Function parameter {} not found in register allocation", param)});
+					}
+				}
+
+				// Make sure the stack pointer was unaffected by these pops
+				if num_stack_passed_args > 0 {
+					let adjustment = (num_stack_passed_args as i64) * 8 - 8;
+					instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(adjustment)));
 				}
 			}
 			TacInstruction::Assign(dest, value) => {
@@ -331,6 +362,29 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 					TacValue::Variable(var) => {
 						let src_reg = get_register(var, register_allocation)?;
 						instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Register(src_reg)));
+					}
+					TacValue::ListAccess { list_variable, index } => {
+						let list_reg = get_register(list_variable, register_allocation)?;
+
+						match &**index {
+							TacValue::Constant(imm_index) => {
+								// Calculate address: [list_reg + imm_index * 8]
+								let offset = (*imm_index as u64) * 8;
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::MemoryAddressDirect(from_register(&list_reg) as u64 + offset)));
+							}
+							TacValue::Variable(var_index) => {
+								let index_reg = get_register(&var_index, register_allocation)?;
+								// Need to multiply index_reg by 8 and add to list_reg
+								// Use RAX as temporary
+								instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(index_reg)));
+								instructions.push(Instruction::Mul(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(8)));
+								instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(list_reg.clone()), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::MemoryAddressRegister(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+							}
+							_ => {
+								return Err(Error::SimpleError{message: format!("Unsupported TacValue for list index: {:?}", index)});
+							}
+						}
 					}
 					_ => {
 						return Err(Error::SimpleError{message: format!("Unsupported TacValue in Assign: {:?}", value)});
@@ -577,6 +631,21 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				let dest_reg = get_register(dest_name, register_allocation)?;
 				instructions.push(Instruction::Pop(Argument::Register(dest_reg)));
 			}
+			TacInstruction::InstantiateStruct(var_name, elements) => {
+				let dest_name = match var_name {
+					// If dest has a requested register, use that
+					tac::VariableValue::Variable(name) => name,
+					tac::VariableValue::VariableWithRequestedRegister(name, _) => name,
+				};
+
+				let struct_reg = get_register(dest_name, register_allocation)?;
+
+
+				// Allocate memory for the struct
+				let struct_size = (elements.len() * 8) as i64; // Each element is 8 bytes
+			}
+			TacInstruction::InstantiateList(var, elements) => {
+			}
 		}
 	}
 
@@ -592,7 +661,7 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 fn generate_code_for_call(
 	instructions: &mut Vec<Instruction>,
 	func_name: &String,
-	args: &Vec<VariableValue>,
+	args: &Vec<TacValue>,
 	return_var: &Option<tac::VariableValue>,
 	register_allocation: &HashMap<String, isize>,
 	liveness: &Vec<HashSet<VariableValue>>,
@@ -625,15 +694,101 @@ fn generate_code_for_call(
 			saved_registers.push(reg.clone());
 		}
 	}
+
 	
 	// reserve 32-byte shadow
 	instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32)));
 
-
-
 	// Make sure that the stack is aligned here
 	let stack_alignment_id = instruction_index; // Unique ID for this call site
 	instructions.push(Instruction::PreCallStackAlign(stack_alignment_id));
+
+	let arg_registers = [
+		Register::General(RegisterType::RCX, RegisterSize::QuadWord),
+		Register::General(RegisterType::RDX, RegisterSize::QuadWord),
+		Register::Extended(8, RegisterSize::QuadWord),  // r8
+		Register::Extended(9, RegisterSize::QuadWord),  // r9
+	];
+
+	let num_stack_passed_args = if args.len() > arg_registers.len() {
+		args.len() - arg_registers.len()
+	} else {
+		0
+	};
+
+	println!("Generating call to {} with {} args ({} on stack)", func_name, args.len(), num_stack_passed_args);
+
+	// And we still need to maintain alignment if we will push an odd number of stack arguments
+	let need_to_align_stack_from_pushed_args = (num_stack_passed_args % 2) != 0;
+	if need_to_align_stack_from_pushed_args {
+		instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(8)));
+	}
+
+	// We start by pushing the stack-passed arguments onto the stack
+	for (i, argument) in args.iter().enumerate() {
+		// Only do the stack-passed values now
+		if i >= arg_registers.len() {
+			match argument {
+				TacValue::Variable(var) => {
+					let src_reg = get_register(var, register_allocation)?;
+					instructions.push(Instruction::Push(Argument::Register(src_reg)));
+				}
+				TacValue::Constant(imm) => {
+					instructions.push(Instruction::Push(Argument::Immediate(*imm as i64)));
+				}
+				_ => {
+					return Err(Error::SimpleError{message: format!("Unsupported TacValue in function call argument: {:?}", argument)});
+				}
+			}
+		}
+	}
+
+	// Write the arguments to the correct registers
+	let num_register_args = std::cmp::min(args.len(), arg_registers.len());
+
+	// First we find which argument registers are necessary later on, to avoid overwriting them prematurely
+	let mut arguments_to_pop: Vec<usize> = Vec::new();
+
+	for (i, argument) in args.iter().enumerate() {
+		match argument {
+			TacValue::Variable(var) => {
+				let src_reg = get_register(var, register_allocation)?;
+
+				for j in 0..num_register_args {
+					if src_reg == arg_registers[j] {// && i < args.len() - 1 {
+						// This argument register is needed later, so push it and mark it as to be popped later
+						instructions.push(Instruction::Push(Argument::Register(arg_registers[j].clone())));
+						arguments_to_pop.push(j);
+					}
+				}
+			}
+			_ => {}
+		}
+	}
+
+	// Now we can move the arguments into the correct registers
+	for (i, argument) in args.iter().enumerate() {
+		// Only do the register-passed values now, as we still have items on the stack left to pop
+		if i < arg_registers.len() {
+			match argument {
+				TacValue::Variable(var) => {
+					let src_reg = get_register(var, register_allocation)?;
+					instructions.push(Instruction::Mov(Argument::Register(arg_registers[i].clone()), Argument::Register(src_reg)));
+				}
+				TacValue::Constant(imm) => {
+					instructions.push(Instruction::Mov(Argument::Register(arg_registers[i].clone()), Argument::Immediate(*imm as i64)));
+				}
+				_ => {
+					return Err(Error::SimpleError{message: format!("Unsupported TacValue in function call argument: {:?}", argument)});
+				}
+			}
+		}
+	}
+
+	// Finally we can pop the saved argument registers back
+	for arg_reg_index in arguments_to_pop.iter().rev() {
+		instructions.push(Instruction::Pop(Argument::Register(arg_registers[*arg_reg_index].clone())));
+	}
 
 	// Call the function
 	if is_syscall {
@@ -644,10 +799,15 @@ fn generate_code_for_call(
 		instructions.push(Instruction::Call(func_name.clone()));
 	}
 
+	// Restore stack from pushed arguments, if needed
+	if num_stack_passed_args > 0 {
+		instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate((num_stack_passed_args * 8) as i64)));
+	}
+
 	// Restore stack alignment after call
 	instructions.push(Instruction::PostCallStackAlign(stack_alignment_id));
 
-	// Restore the stack pointer
+	// Restore the stack pointer from the shadow space
 	instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32)));
 
 
@@ -706,6 +866,12 @@ fn ensure_stack_alignment(instructions: &mut Vec<Instruction>) {
 					}
 					print!("Restoring stack after call at instruction {}. Adjustment was: {}\n", index, adjustment);
 					instructions[index] = Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(adjustment));
+				}
+			}
+			Instruction::Label(_, optional_stack_args) => {
+				if let Some(num_stack_args) = optional_stack_args {
+					let total_stack_bytes = (*num_stack_args as i64) * 8;
+					//stack_offset += total_stack_bytes;
 				}
 			}
 			_ => {}
@@ -783,7 +949,7 @@ fn print_instruction(instruction: &Instruction) {
 		Instruction::Pop(arg) => {
 			println!("POP {}", arg);
 		}
-		Instruction::Label(name) => {
+		Instruction::Label(name, _) => {
 			println!("{}:", name);
 		}
 		Instruction::ExternCall(num) => {

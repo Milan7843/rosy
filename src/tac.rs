@@ -21,15 +21,17 @@ pub enum TacInstruction {
     CompareAndGoto(TacValue, TacValue, ComparisonOp, String),
     Label(String),
     FunctionLabel(String, Vec<String>), // Function entry point label with name and parameter names
-    Call(String, Vec<VariableValue>, Option<VariableValue>),
-    ExternCall(String, Vec<VariableValue>, Option<VariableValue>),
+    Call(String, Vec<TacValue>, Option<VariableValue>),
+    ExternCall(String, Vec<TacValue>, Option<VariableValue>),
     Return(Option<TacValue>),
     Push(TacValue),
     Pop(VariableValue),
     MovRSPTo(VariableValue), // Move RSP to the given variable (used for stack management)
     ProgramStart(),
     // Direct instructions must be handled with care and never generated from normal code
-    DirectInstruction(Instruction)
+    DirectInstruction(Instruction),
+    InstantiateList(VariableValue, Vec<TacValue>), // Variable that holds the metadata, elements
+    InstantiateStruct(VariableValue, Vec<TacValue>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -87,6 +89,11 @@ pub enum TacValue {
     Constant(i64),
     Variable(String),
     StringLiteral(String),
+    Struct(Vec<(String, TacValue)>),
+    ListAccess {
+        list_variable: String,
+        index: Box<TacValue>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -624,9 +631,39 @@ fn generate_tac_for_rec_expr(
             Ok(TacValue::Variable(temp_var))
         }
 
-        RecExprData::List { elements } => Err(Error::SimpleError {
-            message: "List expressions are not supported in TAC generation".to_string(),
-        }),
+        RecExprData::List { elements } => {
+            // First we will initialize the list
+            let mut element_values = Vec::new();
+
+            for element in elements {
+                let element_value = generate_tac_for_rec_expr(
+                    element,
+                    instructions,
+                    temp_counter,
+                    function_env,
+                    variable_env,
+                )?;
+                element_values.push(element_value);
+            }
+            let temp_var = format!("list{}", temp_counter);
+            *temp_counter += 1;
+
+            instructions.push(TacInstruction::InstantiateStruct(
+                VariableValue::Variable(temp_var.clone()), // The name of the created struct
+                vec![
+                    TacValue::Constant(0), // Placeholder for pointer to data in heap
+                    TacValue::Constant(element_values.len() as i64), // Current length
+                    TacValue::Constant(element_values.len().next_power_of_two() as i64) // Capacity
+                ],
+            ));
+
+            instructions.push(TacInstruction::InstantiateList(
+                VariableValue::Variable(temp_var.clone()),
+                element_values,
+            ));
+
+            Ok(TacValue::Variable(temp_var))
+        }
 
         RecExprData::FunctionCall {
             function_name,
@@ -651,7 +688,7 @@ fn generate_tac_for_rec_expr(
                     Err(e) => return Err(e),
                 };
 
-
+            /* 
             let argument_registers = vec![0, 1, 4, 3];
 
             // Create up to 4 temporary variables for arguments
@@ -669,10 +706,11 @@ fn generate_tac_for_rec_expr(
                 ));
                 arg_temps.push(VariableValue::VariableWithRequestedRegister(temp_var, argument_registers[i]));
             }
-
+            */
+            
             match return_type {
                 Type::Undefined => {
-                    instructions.push(TacInstruction::Call(function_label, arg_temps, None));
+                    instructions.push(TacInstruction::Call(function_label, arg_values, None));
                     return Ok(TacValue::Variable(
                         "TODO fix undefined return type".to_string(),
                     )); // or some other placeholder for void
@@ -683,12 +721,25 @@ fn generate_tac_for_rec_expr(
                     *temp_counter += 1;
                     instructions.push(TacInstruction::Call(
                         function_label,
-                        arg_temps,
+                        arg_values,
                         Some(VariableValue::Variable(temp_var.clone())),
                     ));
                     Ok(TacValue::Variable(temp_var))
                 }
             }
+        }
+        RecExprData::ListAccess { variable, index } => {
+            let index_value = generate_tac_for_rec_expr(
+                index,
+                instructions,
+                temp_counter,
+                function_env,
+                variable_env,
+            )?;
+            Ok(TacValue::ListAccess {
+                list_variable: variable.clone(),
+                index: Box::new(index_value),
+            })
         }
 
         _ => Err(Error::SimpleError {
@@ -821,6 +872,12 @@ fn print_instruction(instr: &TacInstruction) {
         }
         TacInstruction::MovRSPTo(var) => {
             println!("mov_rsp_to {}", var);
+        }
+        TacInstruction::InstantiateList(var, elements) => {
+            println!("instantiate_list at metadata {} with elements {:?}", var, elements);
+        }
+        TacInstruction::InstantiateStruct(var, fields) => {
+            println!("instantiate_struct {} with fields {:?}", var, fields);
         }
     }
 }

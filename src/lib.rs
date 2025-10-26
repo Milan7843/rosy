@@ -17,3 +17,4 @@ pub mod variablecollector;
 pub mod defaultfunctions;
 pub mod optimiser;
 pub mod instructionsimplifier;
+pub mod libraryfunctions;

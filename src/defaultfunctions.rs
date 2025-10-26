@@ -101,7 +101,7 @@ fn default_print_int_function(
 
 	let loop_start_label = format!("print_int_loop_start_{}", label_counter);
 
-	add_direct(instructions, Instruction::Label(loop_start_label.clone()));
+	add_direct(instructions, Instruction::Label(loop_start_label.clone(), None));
 	*label_counter += 1;
 	// Clear RDX
 	add_direct(instructions, Instruction::Xor(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord))));
@@ -214,7 +214,7 @@ fn default_println_int_function(
 
 	let loop_start_label = format!("print_int_loop_start_{}", label_counter);
 
-	add_direct(instructions, Instruction::Label(loop_start_label.clone()));
+	add_direct(instructions, Instruction::Label(loop_start_label.clone(), None));
 	*label_counter += 1;
 	// Clear RDX
 	add_direct(instructions, Instruction::Xor(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord))));
