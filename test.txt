@@ -1,4 +1,4 @@
-fun f(a, b, c, d, e)
-	return a+b+c+d+e
+fun f(a, b, c, d, e, f)
+	return a+b+c+d+e+f
 
-print(f(1, 2, 3, 4, 5))
+print(f(1, 2, 3, 4, 5, 6))

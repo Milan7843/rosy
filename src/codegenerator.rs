@@ -186,8 +186,10 @@ pub enum Argument {
 	Register(Register),
 	Immediate(i64),
 	Label(String),
-	MemoryAddressDirect(u64), // e.g., [rax], [rbx + 4]
-	MemoryAddressRegister(Register)
+	MemoryAddressDirect(u64),
+	MemoryAddressRegister(Register),
+	StackMemoryOffsetDirect(u64), // [rsp + offset]
+	StackMemoryOffsetRegister(Register), // [rsp + reg]
 }
 
 impl std::fmt::Display for Argument {
@@ -196,8 +198,10 @@ impl std::fmt::Display for Argument {
 			Argument::Register(reg) => write!(f, "{}", reg),
 			Argument::Immediate(value) => write!(f, "{}", value),
 			Argument::Label(name) => write!(f, "{}", name),
-			Argument::MemoryAddressDirect(addr) => write!(f, "[{}]", addr),
-			Argument::MemoryAddressRegister(reg) => write!(f, "[{}]", reg),
+			Argument::MemoryAddressDirect(addr) => write!(f, "[rip + {}]", addr),
+			Argument::MemoryAddressRegister(reg) => write!(f, "[rip + {}]", reg),
+			Argument::StackMemoryOffsetDirect(offset) => write!(f, "[rsp + {}]", offset),
+			Argument::StackMemoryOffsetRegister(reg) => write!(f, "[rsp + {}]", reg),
 		}
 	}
 }
@@ -320,12 +324,6 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 						pushed_arguments_to_recover.clear();
 					}
 				}
-
-				// TODO: use relative memory addressing for this
-
-				// Before popping, add 8 bytes to skip the return address
-				instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(8)));
-
 				// Recover any arguments passed on the stack
 				for (i, param) in params.iter().enumerate() {
 					if i < arg_registers.len() {
@@ -334,18 +332,12 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 
 					if let Some(&reg_num) = register_allocation.get(param) {
 						let dest_reg = to_register(reg_num);
+						let stack_index = i - arg_registers.len();
 						// Move from stack to allocated register
-						instructions.push(Instruction::Pop(Argument::Register(dest_reg)));
-
+						instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::StackMemoryOffsetDirect(8 * stack_index as u64 + 8))); // +8 for return address
 					} else {
 						return Err(Error::SimpleError{message: format!("Function parameter {} not found in register allocation", param)});
 					}
-				}
-
-				// Make sure the stack pointer was unaffected by these pops
-				if num_stack_passed_args > 0 {
-					let adjustment = (num_stack_passed_args as i64) * 8 - 8;
-					instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(adjustment)));
 				}
 			}
 			TacInstruction::Assign(dest, value) => {
