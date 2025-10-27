@@ -26,7 +26,8 @@ pub enum AssemblyInstruction {
 	ExternCall(String), // name of the syscall function (used for IAT)
 	Call(String),   // function name
 	Nop,
-	ProgramStart
+	ProgramStart,
+	Comment(String),
 }
 
 pub fn to_assembly_instructions(instructions: &Vec<Instruction>) -> Vec<AssemblyInstruction> {
@@ -326,6 +327,7 @@ pub fn to_assembly_instructions(instructions: &Vec<Instruction>) -> Vec<Assembly
 			Instruction::Call(name) => assembly_instructions.push(AssemblyInstruction::Call(name.clone())),
 			Instruction::Nop => assembly_instructions.push(AssemblyInstruction::Nop),
 			Instruction::ProgramStart => assembly_instructions.push(AssemblyInstruction::ProgramStart),
+			Instruction::Comment(comment) => assembly_instructions.push(AssemblyInstruction::Comment(comment.to_string())),
 		}
 	}
 	assembly_instructions
@@ -408,6 +410,9 @@ pub fn print_assembly_instructions(instructions: &Vec<AssemblyInstruction>) {
 			}
 			AssemblyInstruction::ProgramStart => {
 				println!("; Program Start");
+			}
+			AssemblyInstruction::Comment(comment) => {
+				println!("; {}", comment);
 			}
 		}
 	}

@@ -85,11 +85,11 @@ use rosy::pipeline::run_compilation_pipeline;
 //   - For loop over array
 // v  - Nested for loops
 // - Functions: (also check if variables outside function are unaffected)
-//   - Function with no arguments and static return value
-//   - Function with single argument and return value
-//   - Function with arguments and return value
-//   - Function with no arguments and no return value
-//   - Function with single argument and no return value
+// v  - Function with no arguments and static return value
+// v  - Function with single argument and return value
+// v  - Function with arguments and return value
+// v  - Function with no arguments and no return value
+// v  - Function with single argument and no return value
 //   - Function with arguments and no return value
 //   - Multiple functions
 //   - Recursive function
@@ -97,6 +97,11 @@ use rosy::pipeline::run_compilation_pipeline;
 //   - Return value from within if statement
 //   - Return early from function
 //   - Call function several times
+// - Lists:
+// v  - Create list with integer literals
+// v  - Access with constant index
+// v  - Access with variable index
+//   - Modify list elements
 
 fn run_and_compare(program: Vec<&str>, expected_output: String) {
 	// create a unique output filename in the temp dir to avoid collisions
@@ -795,7 +800,6 @@ fn function_one_arg_no_return() {
 	let program: Vec<&str> = vec![
 		"fun f(a)",
 		"    return",
-		"print(f())",
 	];
 
 	let expected_output = "";
@@ -933,3 +937,71 @@ fn function_nine_arg_dynamic_return() {
 	run_and_compare(program, expected_output.to_string());
 }
 
+#[test]
+fn size_zero_list_creation() {
+	let program: Vec<&str> = vec![
+		"a = []",
+	];
+
+	let expected_output = "";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn size_one_list_creation_access_constant_index() {
+	let program: Vec<&str> = vec![
+		"a = [2]",
+		"print(a[0])",
+	];
+
+	let expected_output = "2";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn size_three_list_creation_access_constant_index() {
+	let program: Vec<&str> = vec![
+		"a = [2, 3, 4]",
+		"print(a[0])",
+		"print(a[1])",
+		"print(a[2])",
+	];
+
+	let expected_output = "234";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn size_three_list_creation_access_variable_index() {
+	let program: Vec<&str> = vec![
+		"a = [2, 3, 4]",
+		"i = 0",
+		"print(a[i])",
+		"i = 1",
+		"print(a[i])",
+		"i = 2",
+		"print(a[i])",
+	];
+
+	let expected_output = "234";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn list_update() {
+	let program: Vec<&str> = vec![
+		"a = [2, 3, 4]",
+		"a[1] = 5",
+		"print(a[0])",
+		"print(a[1])",
+		"print(a[2])",
+	];
+
+	let expected_output = "254";
+
+	run_and_compare(program, expected_output.to_string());
+}

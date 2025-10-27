@@ -198,8 +198,8 @@ impl std::fmt::Display for Argument {
 			Argument::Register(reg) => write!(f, "{}", reg),
 			Argument::Immediate(value) => write!(f, "{}", value),
 			Argument::Label(name) => write!(f, "{}", name),
-			Argument::MemoryAddressDirect(addr) => write!(f, "[rip + {}]", addr),
-			Argument::MemoryAddressRegister(reg) => write!(f, "[rip + {}]", reg),
+			Argument::MemoryAddressDirect(addr) => write!(f, "[{}]", addr),
+			Argument::MemoryAddressRegister(reg) => write!(f, "[{}]", reg),
 			Argument::StackMemoryOffsetDirect(offset) => write!(f, "[rsp + {}]", offset),
 			Argument::StackMemoryOffsetRegister(reg) => write!(f, "[rsp + {}]", reg),
 		}
@@ -235,6 +235,7 @@ pub enum Instruction {
 	ProgramStart,
 	PreCallStackAlign(usize), // ID (to link with PostCallStackAlign)
 	PostCallStackAlign(usize), // ID
+	Comment(String)
 }
 
 fn get_register(variable_name: &String, register_allocation: &HashMap<String, isize>) -> Result<Register, Error> {
@@ -372,27 +373,57 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 						instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Register(src_reg)));
 					}
 					TacValue::ListAccess { list_variable, index } => {
+
+						instructions.push(Instruction::Comment(format!("Accessing list element of {} at index {:?}", list_variable, index)));
+
 						let list_reg = get_register(list_variable, register_allocation)?;
 
 						match &**index {
 							TacValue::Constant(imm_index) => {
 								// Calculate address: [list_reg + imm_index * 8]
-								let offset = (*imm_index as u64) * 8;
-								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::MemoryAddressDirect(from_register(&list_reg) as u64 + offset)));
+
+								// We need to find the absolute address of the list, so first we need to dereference list_reg to get the struct address
+								instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::MemoryAddressRegister(list_reg)));
+								
+								// TODO: Handle out of bounds?
+								let offset = *imm_index * 8;
+								// Now RAX holds the address of the list data, so we can add the offset to it
+								instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(offset)));
+
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::MemoryAddressRegister(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
 							}
 							TacValue::Variable(var_index) => {
-								let index_reg = get_register(&var_index, register_allocation)?;
-								// Need to multiply index_reg by 8 and add to list_reg
-								// Use RAX as temporary
-								instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(index_reg)));
+								instructions.push(Instruction::Comment("Accessing list element with variable index".to_string()));
+
+								let index_reg = get_register(var_index, register_allocation)?;
+								
+								// Going to use RBX as a temporary register to hold the list address, so need to save it if it's live
+								let save_rbx = is_live(register_allocation, &liveness[instruction_index + 1], &Register::General(RegisterType::RBX, RegisterSize::QuadWord));
+								if save_rbx {
+									instructions.push(Instruction::Push(Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord))));
+								}
+
+								// Mov rax, index_reg
+								instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(index_reg.clone())));
+								// Mul rax, 8
 								instructions.push(Instruction::Mul(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(8)));
-								instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(list_reg.clone()), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+								// Mov rbx, [list_reg] ; get list address
+								instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord)), Argument::MemoryAddressRegister(list_reg)));
+								// Add rax, rbx ; add offset
+								instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord))));
+								// Mov dest_reg, [rax]
 								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::MemoryAddressRegister(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+
+								if save_rbx {
+									instructions.push(Instruction::Pop(Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord))));
+								}
 							}
 							_ => {
 								return Err(Error::SimpleError{message: format!("Unsupported TacValue for list index: {:?}", index)});
 							}
 						}
+
+						instructions.push(Instruction::Comment("Finish accessing list element".to_string()));
 					}
 					_ => {
 						return Err(Error::SimpleError{message: format!("Unsupported TacValue in Assign: {:?}", value)});
@@ -640,6 +671,9 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				instructions.push(Instruction::Pop(Argument::Register(dest_reg)));
 			}
 			TacInstruction::InstantiateStruct(var_name, elements) => {
+
+				instructions.push(Instruction::Comment("Start instantiating struct".to_string()));
+
 				let dest_name = match var_name {
 					tac::VariableValue::Variable(name) => name,
 					tac::VariableValue::VariableWithRequestedRegister(name, _) => name,
@@ -668,6 +702,8 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				instructions.push(Instruction::PreCallStackAlign(instruction_index));
 				instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
 				instructions.push(Instruction::ExternCall("GetProcessHeap".to_string()));
+				instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
+				instructions.push(Instruction::PostCallStackAlign(instruction_index));
 				// Heap handle is now in RAX, must be moved to RCX for HeapAlloc
 				instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RCX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
 
@@ -679,19 +715,25 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				let struct_size = (elements.len() * 8) as i64; // Each element is 8 bytes
 				instructions.push(Instruction::Mov(Argument::Register(Register::Extended(8, RegisterSize::QuadWord)), Argument::Immediate(struct_size)));
 
+				instructions.push(Instruction::PreCallStackAlign(instruction_index + tac.len()));
+				instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
 				instructions.push(Instruction::ExternCall("HeapAlloc".to_string()));
+				instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
+				instructions.push(Instruction::PostCallStackAlign(instruction_index + tac.len()));
 
 				// Pointer to allocated struct is now in RAX
 				instructions.push(Instruction::Mov(Argument::Register(struct_reg), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
-
-				instructions.push(Instruction::PostCallStackAlign(instruction_index));
 
 				// Restore the saved registers
 				for reg in registers_to_save.iter().rev() {
 					instructions.push(Instruction::Pop(Argument::Register(reg.clone())));
 				}
+
+				instructions.push(Instruction::Comment("Finish instantiating struct".to_string()));
 			}
 			TacInstruction::InstantiateList(var, elements) => {
+
+				instructions.push(Instruction::Comment("Start instantiating list".to_string()));
 				
 				let dest_name = match var {
 					tac::VariableValue::Variable(name) => name,
@@ -716,11 +758,16 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 					}
 				}
 
+				// Push the variable holding the struct pointer to save it
+				instructions.push(Instruction::Push(Argument::Register(struct_register.clone())));
+
 				// Start by allocating memory for the struct
 				// First we need the heap handle
 				instructions.push(Instruction::PreCallStackAlign(instruction_index));
 				instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
 				instructions.push(Instruction::ExternCall("GetProcessHeap".to_string()));
+				instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
+				instructions.push(Instruction::PostCallStackAlign(instruction_index));
 				// Heap handle is now in RAX, must be moved to RCX for HeapAlloc
 				instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RCX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
 
@@ -732,7 +779,14 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				let struct_size = (elements.len() * 8) as i64; // Each element is 8 bytes
 				instructions.push(Instruction::Mov(Argument::Register(Register::Extended(8, RegisterSize::QuadWord)), Argument::Immediate(struct_size)));
 
+				instructions.push(Instruction::PreCallStackAlign(instruction_index + tac.len()));
+				instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
 				instructions.push(Instruction::ExternCall("HeapAlloc".to_string()));
+				instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
+				instructions.push(Instruction::PostCallStackAlign(instruction_index + tac.len()));
+
+				// Get the struct pointer back
+				instructions.push(Instruction::Pop(Argument::Register(struct_register.clone())));
 
 				// Pointer to allocated list is now in RAX
 				// So we will update the pointer in the struct to reflect that (mov [struct_register], rax)
@@ -753,8 +807,9 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				
 				// Now we can fill in the elements of the list
 				let offset_reg = Register::General(RegisterType::RAX, RegisterSize::QuadWord);
-				instructions.push(Instruction::Mov(Argument::Register(offset_reg.clone()), Argument::Register(struct_register.clone())));
+				//instructions.push(Instruction::Mov(Argument::Register(offset_reg.clone()), Argument::Register(struct_register.clone())));
 				for (i, element) in elements.iter().enumerate() {
+					println!("writing element {:?}", element);
 					match element {
 						TacValue::Variable(var) => {
 							let src_reg = get_register(var, register_allocation)?;
@@ -775,12 +830,12 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 					}
 				}
 
-				instructions.push(Instruction::PostCallStackAlign(instruction_index));
-
 				// Restore the saved registers
 				for reg in registers_to_save.iter().rev() {
 					instructions.push(Instruction::Pop(Argument::Register(reg.clone())));
 				}
+
+				instructions.push(Instruction::Comment("Finish instantiating list".to_string()));
 			}
 		}
 	}
@@ -1100,6 +1155,9 @@ fn print_instruction(instruction: &Instruction) {
 		}
 		Instruction::PostCallStackAlign(id) => {
 			println!("; Post-Call Stack Alignment {}", id);
+		}
+		Instruction::Comment(comment) => {
+			println!("; {}", comment);
 		}
 	}
 }

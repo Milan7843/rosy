@@ -47,6 +47,15 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Varia
                     TacValue::Variable(var) => {
                         liveness_before.insert(VariableValue::Variable(var.clone()));
                     }
+                    TacValue::ListAccess { list_variable, index } => {
+                        liveness_before.insert(VariableValue::Variable(list_variable.clone()));
+                        match &**index {
+                            TacValue::Variable(var) => {
+                                liveness_before.insert(VariableValue::Variable(var.clone()));
+                            }
+                            _ => {}
+                        }
+                    }
                     _ => {}
                 }
             }

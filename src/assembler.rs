@@ -108,15 +108,6 @@ fn assemble(instructions: Vec<AssemblyInstruction>, machine_code: &mut Vec<u8>, 
 						write_u8(machine_code, mod_rm);
 						write_u32(machine_code, m as u32); // 32-bit displacement
 					}
-					(Argument::MemoryAddressDirect(m), Argument::Register(r)) => {
-						let rex_r = get_register_is_extended(&r);
-
-						write_u8(machine_code, get_rex_byte(true, rex_r, false, false)); // REX.W prefix
-						write_u8(machine_code, 0x89); // MOV r/m64, r64
-						let mod_rm = 0b00_000_000 | (get_rm(&r) << 3) | 0b101; // MOD=00, R/M=101 for disp32
-						write_u8(machine_code, mod_rm);
-						write_u32(machine_code, m as u32); // 32-bit displacement
-					}
 					(Argument::MemoryAddressRegister(mar), Argument::Register(r)) => {
 						let size = match mar.clone() {
 							Register::General(_, s) | Register::Extended(_, s) => s,
@@ -151,6 +142,35 @@ fn assemble(instructions: Vec<AssemblyInstruction>, machine_code: &mut Vec<u8>, 
 								// MOD = 00 (no displacement), REG = r (source), R/M = m (base register)
 								let mod_rm = 0b00_000_000 | (get_rm(&r) << 3) | get_rm(&mar);
 								write_u8(machine_code, mod_rm);
+							}
+							_ => {
+								unimplemented!("Only 64-bit MOV is implemented for MemoryAddressRegister");
+							}
+						}
+					}
+					(Argument::Register(r), Argument::MemoryAddressRegister(mar)) => {
+						let size = match mar.clone() {
+							Register::General(_, s) | Register::Extended(_, s) => s,
+						};
+
+						match size {
+							RegisterSize::QuadWord => {
+								// MOV r64, [reg]
+								let rex_r = get_register_is_extended(&r);
+								let rex_b = get_register_is_extended(&mar);
+
+								write_u8(machine_code, get_rex_byte(true, rex_r, false, rex_b)); // REX.W prefix
+								write_u8(machine_code, 0x8B); // MOV r64, r/m64
+
+								// MOD = 00 (no displacement), REG = r (dest), R/M = m (base register)
+								let mod_rm = 0b00_000_000 | (get_rm(&r) << 3) | get_rm(&mar);
+								write_u8(machine_code, mod_rm);
+
+								// Special case: if m == RBP or m == R13, MOD=00 with R/M=101 or 1001 is interpreted as disp32.
+								// You must emit a disp8 = 0 in that case to indicate [RBP + 0] or [R13 + 0].
+								if matches!(mar, Register::General(RegisterType::RBP, _) | Register::Extended(13, _)) {
+									write_u8(machine_code, 0x00);
+								}
 							}
 							_ => {
 								unimplemented!("Only 64-bit MOV is implemented for MemoryAddressRegister");
@@ -200,7 +220,7 @@ fn assemble(instructions: Vec<AssemblyInstruction>, machine_code: &mut Vec<u8>, 
 						let rex_r = get_register_is_extended(&r);
 						let rex_b = false; // because base is RSP (not extended)
 						write_u8(machine_code, get_rex_byte(true, rex_r, false, rex_b));
-						
+
 						write_u8(machine_code, 0x8B); // MOV r64, r/m64
 
 						let mod_rm = 0b10_000_000 | (get_rm(&r) << 3) | 0b100; // MOD=10 (disp32), R/M=100 for SIB
@@ -222,9 +242,9 @@ fn assemble(instructions: Vec<AssemblyInstruction>, machine_code: &mut Vec<u8>, 
 						// 32-bit immediate
 						write_u32(machine_code, imm as u32);
 					}
-					_ => {
+					(arg1, arg2) => {
 						// Placeholder for other MOV cases
-						unimplemented!("MOV not implemented yet");
+						unimplemented!("MOV not implemented yet for {:?}, {:?}", arg1, arg2);
 					}
 				}
 			}
@@ -552,6 +572,7 @@ fn assemble(instructions: Vec<AssemblyInstruction>, machine_code: &mut Vec<u8>, 
 				// This call still needs its address resolved
 				jumps_to_resolve.push((func_name, pos));
 			}
+			AssemblyInstruction::Comment(_) => {}
 			_ => {
 				// Placeholder for other instructions
 				unimplemented!("Instruction {:?} not implemented yet", instr);
