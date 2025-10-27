@@ -151,8 +151,10 @@ fn default_print_int_function(
 	add_direct(instructions, Instruction::Mov(Argument::Register(Register::Extended(9, RegisterSize::QuadWord)), Argument::Immediate(0)));
 
 	// WriteFile call
-	// setup for call: sub rsp, 40
+	// setup for call: sub rsp, 40 (stack space for shadow space and alignment)
 	add_direct(instructions, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
+	// write the stack-passed argument onto the stack just above the shadow space
+	add_direct(instructions, Instruction::Mov(Argument::StackMemoryOffsetDirect(32), Argument::Immediate(0))); // lpNumberOfBytesWritten
 	// call WriteFile
 	add_direct(instructions, Instruction::PreCallStackAlign(*label_counter as usize));
 	add_direct(instructions, Instruction::ExternCall("WriteFile".to_string()));
@@ -270,8 +272,11 @@ fn default_println_int_function(
 	add_direct(instructions, Instruction::Mov(Argument::Register(Register::Extended(9, RegisterSize::QuadWord)), Argument::Immediate(0)));
 
 	// WriteFile call
-	// setup for call: sub rsp, 40
+	// setup for call: sub rsp, 40 (stack space for shadow space and alignment)
 	add_direct(instructions, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
+	// write the stack-passed argument onto the stack just above the shadow space
+	add_direct(instructions, Instruction::Mov(Argument::StackMemoryOffsetDirect(32), Argument::Immediate(0))); // lpNumberOfBytesWritten
+
 	// call WriteFile
 	add_direct(instructions, Instruction::PreCallStackAlign(*label_counter as usize));
 	add_direct(instructions, Instruction::ExternCall("WriteFile".to_string()));

@@ -264,7 +264,7 @@ fn simple_print_with_variable_multiplication_variable_unaffected() {
 		"print(d)"
 	];
 
-	let expected_output = "333361215";
+	let expected_output = "333361815";
 
 	run_and_compare(program, expected_output.to_string());
 }
@@ -760,6 +760,175 @@ fn boolean_xor_true_true() {
 	];
 
 	let expected_output = "1";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn function_zero_args_no_return() {
+	let program: Vec<&str> = vec![
+		"fun f()",
+		"    return",
+		"f()",
+	];
+
+	let expected_output = "";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn function_zero_args_static_return() {
+	let program: Vec<&str> = vec![
+		"fun f()",
+		"    return 2",
+		"print(f())",
+	];
+
+	let expected_output = "2";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn function_one_arg_no_return() {
+	let program: Vec<&str> = vec![
+		"fun f(a)",
+		"    return",
+		"print(f())",
+	];
+
+	let expected_output = "";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn function_one_arg_static_return() {
+	let program: Vec<&str> = vec![
+		"fun f(a)",
+		"    return 2",
+		"print(f(1))",
+	];
+
+	let expected_output = "2";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn function_one_arg_dynamic_return() {
+	let program: Vec<&str> = vec![
+		"fun f(a)",
+		"    return a",
+		"print(f(2))",
+	];
+
+	let expected_output = "2";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn function_two_arg_dynamic_return() {
+	let program: Vec<&str> = vec![
+		"fun f(a, b)",
+		"    return a + b",
+		"print(f(1, 2))",
+	];
+
+	let expected_output = "3";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn function_three_arg_dynamic_return() {
+	let program: Vec<&str> = vec![
+		"fun f(a, b, c)",
+		"    return a + b + c",
+		"print(f(1, 2, 3))",
+	];
+
+	let expected_output = "6";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn function_four_arg_dynamic_return() {
+	let program: Vec<&str> = vec![
+		"fun f(a, b, c, d)",
+		"    return a + b + c + d",
+		"print(f(1, 2, 3, 4))",
+	];
+
+	let expected_output = "10";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn function_five_arg_dynamic_return() {
+	let program: Vec<&str> = vec![
+		"fun f(a, b, c, d, e)",
+		"    return a + b + c + d + e",
+		"print(f(1, 2, 3, 4, 5))",
+	];
+
+	let expected_output = "15";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn function_six_arg_dynamic_return() {
+	let program: Vec<&str> = vec![
+		"fun f(a, b, c, d, e, x)",
+		"    return a + b + c + d + e + x",
+		"print(f(1, 2, 3, 4, 5, 6))",
+	];
+
+	let expected_output = "21";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn function_seven_arg_dynamic_return() {
+	let program: Vec<&str> = vec![
+		"fun f(a, b, c, d, e, x, g)",
+		"    return a + b + c + d + e + x + g",
+		"print(f(1, 2, 3, 4, 5, 6, 7))",
+	];
+
+	let expected_output = "28";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn function_eight_arg_dynamic_return() {
+	let program: Vec<&str> = vec![
+		"fun f(a, b, c, d, e, x, g, h)",
+		"    return a + b + c + d + e + x + g + h",
+		"print(f(1, 2, 3, 4, 5, 6, 7, 8))",
+	];
+
+	let expected_output = "36";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn function_nine_arg_dynamic_return() {
+	let program: Vec<&str> = vec![
+		"fun f(a, b, c, d, e, x, g, h, i)",
+		"    return a + b + c + d + e + x + g + h + i",
+		"print(f(1, 2, 3, 4, 5, 6, 7, 8, 9))",
+	];
+
+	let expected_output = "45";
 
 	run_and_compare(program, expected_output.to_string());
 }
