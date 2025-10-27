@@ -197,9 +197,10 @@ fn assemble(instructions: Vec<AssemblyInstruction>, machine_code: &mut Vec<u8>, 
 						}
 					}
 					(Argument::Register(r), Argument::StackMemoryOffsetDirect(m)) => {
-						let rex_b = get_register_is_extended(&r);
-
-						write_u8(machine_code, get_rex_byte(true, false, false, rex_b)); // REX.W prefix
+						let rex_r = get_register_is_extended(&r);
+						let rex_b = false; // because base is RSP (not extended)
+						write_u8(machine_code, get_rex_byte(true, rex_r, false, rex_b));
+						
 						write_u8(machine_code, 0x8B); // MOV r64, r/m64
 
 						let mod_rm = 0b10_000_000 | (get_rm(&r) << 3) | 0b100; // MOD=10 (disp32), R/M=100 for SIB
@@ -207,6 +208,19 @@ fn assemble(instructions: Vec<AssemblyInstruction>, machine_code: &mut Vec<u8>, 
 						// SIB byte: scale=00, index=100 (no index), base=100 (RSP)
 						write_u8(machine_code, 0b00_100_100);
 						write_u32(machine_code, m as u32); // 32-bit displacement
+					}
+					(Argument::StackMemoryOffsetDirect(m), Argument::Immediate(imm)) => {
+						write_u8(machine_code, get_rex_byte(true, false, false, false)); // REX.W prefix
+						write_u8(machine_code, 0xC7); // MOV r/m64, imm32
+
+						let mod_rm = 0b10_000_000 | (0b000 << 3) | 0b100; // MOD=10 (disp32), REG=000 (for MOV), R/M=100 for SIB
+						write_u8(machine_code, mod_rm);
+						// SIB byte: scale=00, index=100 (no index), base=100 (RSP)
+						write_u8(machine_code, 0b00_100_100);
+						write_u32(machine_code, m as u32); // 32-bit displacement
+
+						// 32-bit immediate
+						write_u32(machine_code, imm as u32);
 					}
 					_ => {
 						// Placeholder for other MOV cases

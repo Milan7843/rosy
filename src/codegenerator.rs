@@ -334,7 +334,7 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 						let dest_reg = to_register(reg_num);
 						let stack_index = i - arg_registers.len();
 						// Move from stack to allocated register
-						instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::StackMemoryOffsetDirect(8 * stack_index as u64 + 8))); // +8 for return address
+						instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::StackMemoryOffsetDirect(8 * stack_index as u64 + 8 + 32))); // +8 for return address, +32 for shadow space
 					} else {
 						return Err(Error::SimpleError{message: format!("Function parameter {} not found in register allocation", param)});
 					}
@@ -687,10 +687,6 @@ fn generate_code_for_call(
 		}
 	}
 
-	
-	// reserve 32-byte shadow
-	instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32)));
-
 	// Make sure that the stack is aligned here
 	let stack_alignment_id = instruction_index; // Unique ID for this call site
 	instructions.push(Instruction::PreCallStackAlign(stack_alignment_id));
@@ -711,22 +707,32 @@ fn generate_code_for_call(
 	println!("Generating call to {} with {} args ({} on stack)", func_name, args.len(), num_stack_passed_args);
 
 	// And we still need to maintain alignment if we will push an odd number of stack arguments
-	let need_to_align_stack_from_pushed_args = (num_stack_passed_args % 2) != 0;
+	let need_to_align_stack_from_pushed_args = (num_stack_passed_args % 2) == 1;
+	let mut stack_space_necessary = num_stack_passed_args * 8;
 	if need_to_align_stack_from_pushed_args {
-		instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(8)));
+		stack_space_necessary += 8;
 	}
+
+	stack_space_necessary += 32; // Shadow space
+
+	// Adjust stack pointer for shadow space and arguments
+	instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(stack_space_necessary as i64)));
 
 	// We start by pushing the stack-passed arguments onto the stack
 	for (i, argument) in args.iter().enumerate() {
 		// Only do the stack-passed values now
 		if i >= arg_registers.len() {
+
+			let mut stack_offset = (i - arg_registers.len()) * 8;
+			stack_offset += 32; // Shadow space
+
 			match argument {
 				TacValue::Variable(var) => {
 					let src_reg = get_register(var, register_allocation)?;
-					instructions.push(Instruction::Push(Argument::Register(src_reg)));
+					instructions.push(Instruction::Mov(Argument::StackMemoryOffsetDirect(stack_offset as u64), Argument::Register(src_reg)));
 				}
 				TacValue::Constant(imm) => {
-					instructions.push(Instruction::Push(Argument::Immediate(*imm as i64)));
+					instructions.push(Instruction::Mov(Argument::StackMemoryOffsetDirect(stack_offset as u64), Argument::Immediate(*imm as i64)));
 				}
 				_ => {
 					return Err(Error::SimpleError{message: format!("Unsupported TacValue in function call argument: {:?}", argument)});
@@ -792,15 +798,10 @@ fn generate_code_for_call(
 	}
 
 	// Restore stack from pushed arguments, if needed
-	if num_stack_passed_args > 0 {
-		instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate((num_stack_passed_args * 8) as i64)));
-	}
+	instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(stack_space_necessary as i64)));
 
 	// Restore stack alignment after call
 	instructions.push(Instruction::PostCallStackAlign(stack_alignment_id));
-
-	// Restore the stack pointer from the shadow space
-	instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32)));
 
 
 	// Restore saved caller-saved registers
@@ -858,12 +859,6 @@ fn ensure_stack_alignment(instructions: &mut Vec<Instruction>) {
 					}
 					print!("Restoring stack after call at instruction {}. Adjustment was: {}\n", index, adjustment);
 					instructions[index] = Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(adjustment));
-				}
-			}
-			Instruction::Label(_, optional_stack_args) => {
-				if let Some(num_stack_args) = optional_stack_args {
-					let total_stack_bytes = (*num_stack_args as i64) * 8;
-					//stack_offset += total_stack_bytes;
 				}
 			}
 			_ => {}
