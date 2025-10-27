@@ -506,6 +506,22 @@ fn assemble(instructions: Vec<AssemblyInstruction>, machine_code: &mut Vec<u8>, 
 				// This jump still needs its address resolved
 				jumps_to_resolve.push((to_label, pos));
 			}
+			AssemblyInstruction::Sete(dest) => {
+				match dest {
+					Argument::Register(r) => {
+						let rex_b = get_register_is_extended(&r);
+						write_u8(machine_code, get_rex_byte(false, false, false, rex_b)); // REX prefix without W
+						write_u8(machine_code, 0x0F); // Two-byte opcode prefix
+						write_u8(machine_code, 0x94); // SETE r/m8
+
+						let mod_rm = 0b11_000_000 | (0b000 << 3) | get_rm(&r); // MOD=11, REG=000 (for SETE), R/M=r
+						write_u8(machine_code, mod_rm);
+					}
+					_ => {
+						unimplemented!("SETE not implemented for this argument type");
+					}
+				}
+			}
 			AssemblyInstruction::Push(argument) => {
 				match argument {
 					Argument::Register(r) => {

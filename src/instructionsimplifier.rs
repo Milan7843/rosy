@@ -19,6 +19,7 @@ pub enum AssemblyInstruction {
 	Jge(String),           // label
 	Jl(String),            // label
 	Jle(String),           // label
+	Sete(Argument),  // dest (set to 1 if equal)
 	Ret,
 	Push(Argument), // value or register
 	Pop(Argument),  // register
@@ -328,6 +329,7 @@ pub fn to_assembly_instructions(instructions: &Vec<Instruction>) -> Vec<Assembly
 			Instruction::Nop => assembly_instructions.push(AssemblyInstruction::Nop),
 			Instruction::ProgramStart => assembly_instructions.push(AssemblyInstruction::ProgramStart),
 			Instruction::Comment(comment) => assembly_instructions.push(AssemblyInstruction::Comment(comment.to_string())),
+			Instruction::Sete(dest) => assembly_instructions.push(AssemblyInstruction::Sete(dest.clone())),
 		}
 	}
 	assembly_instructions
@@ -386,6 +388,9 @@ pub fn print_assembly_instructions(instructions: &Vec<AssemblyInstruction>) {
 			}
 			AssemblyInstruction::Jle(label) => {
 				println!("JLE {}", label);
+			}
+			AssemblyInstruction::Sete(dest) => {
+				println!("SETE {}", dest);
 			}
 			AssemblyInstruction::Ret => {
 				println!("RET");

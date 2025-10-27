@@ -225,6 +225,7 @@ pub enum Instruction {
 	Jge(String),           // label
 	Jl(String),            // label
 	Jle(String),           // label
+	Sete(Argument),  // dest (set to 1 if equal)
 	Ret,
 	Push(Argument), // value or register
 	Pop(Argument),  // register
@@ -457,6 +458,18 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 							BinOp::Div => {
 								instructions.push(Instruction::Div(Argument::Register(dest_reg.clone()), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(left_reg), Argument::Register(right_reg)));
 							}
+							BinOp::Or => {
+								instructions.push(Instruction::Or(Argument::Register(dest_reg), Argument::Register(left_reg), Argument::Register(right_reg)));
+							}
+							BinOp::And => {
+								instructions.push(Instruction::And(Argument::Register(dest_reg), Argument::Register(left_reg), Argument::Register(right_reg)));
+							}
+							BinOp::Eq => {
+								// Compare left and right
+								instructions.push(Instruction::Cmp(Argument::Register(left_reg), Argument::Register(right_reg)));
+								// Set dest_reg to 1 if equal, 0 otherwise
+								instructions.push(Instruction::Sete(Argument::Register(dest_reg)));
+							}
 							_ => {
 								return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)});
 							}
@@ -477,6 +490,18 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 							}
 							BinOp::Div => {
 								instructions.push(Instruction::Div(Argument::Register(dest_reg.clone()), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(left_reg), Argument::Immediate(*imm_right)));
+							}
+							BinOp::Or => {
+								instructions.push(Instruction::Or(Argument::Register(dest_reg), Argument::Register(left_reg), Argument::Immediate(*imm_right)));
+							}
+							BinOp::And => {
+								instructions.push(Instruction::And(Argument::Register(dest_reg), Argument::Register(left_reg), Argument::Immediate(*imm_right)));
+							}
+							BinOp::Eq => {
+								// Compare left and right
+								instructions.push(Instruction::Cmp(Argument::Register(left_reg), Argument::Immediate(*imm_right)));
+								// Set dest_reg to 1 if equal, 0 otherwise
+								instructions.push(Instruction::Sete(Argument::Register(dest_reg)));
 							}
 							_ => {
 								return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)});
@@ -500,6 +525,18 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 								// For division, we need to move the left immediate into RAX first
 								instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(*imm_left as i64)));
 								instructions.push(Instruction::Div(Argument::Register(dest_reg.clone()), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(right_reg)));
+							}
+							BinOp::Or => {
+								instructions.push(Instruction::Or(Argument::Register(dest_reg), Argument::Immediate(*imm_left as i64), Argument::Register(right_reg)));
+							}
+							BinOp::And => {
+								instructions.push(Instruction::And(Argument::Register(dest_reg), Argument::Immediate(*imm_left as i64), Argument::Register(right_reg)));
+							}
+							BinOp::Eq => {
+								// Compare left and right
+								instructions.push(Instruction::Cmp(Argument::Immediate(*imm_left as i64), Argument::Register(right_reg)));
+								// Set dest_reg to 1 if equal, 0 otherwise
+								instructions.push(Instruction::Sete(Argument::Register(dest_reg)));
 							}
 							_ => {
 								return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)});
@@ -526,6 +563,18 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 									return Err(Error::SimpleError{message: "Division by zero".to_string()});
 								}
 								let result = *imm_left / *imm_right;
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Immediate(result as i64)));
+							}
+							BinOp::Or => {
+								let result = *imm_left | *imm_right;
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Immediate(result as i64)));
+							}
+							BinOp::And => {
+								let result = *imm_left & *imm_right;
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Immediate(result as i64)));
+							}
+							BinOp::Eq => {
+								let result = if imm_left == imm_right { 1 } else { 0 };
 								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Immediate(result as i64)));
 							}
 							_ => {
@@ -1125,6 +1174,9 @@ fn print_instruction(instruction: &Instruction) {
 		}
 		Instruction::Jle(label) => {
 			println!("JLE {:?}", label);
+		}
+		Instruction::Sete(dest) => {
+			println!("SETE -> {}", dest);
 		}
 		Instruction::Ret => {
 			println!("RET");
