@@ -1,9 +1,2 @@
-
-a = 1
-println(a)
-b = a + 1
-c = a + b
-println(5)
-println(a+2)
-d = b
-d = c
+a = [1]
+print(a[0])

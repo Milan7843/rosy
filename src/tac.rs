@@ -707,7 +707,7 @@ fn generate_tac_for_rec_expr(
                 arg_temps.push(VariableValue::VariableWithRequestedRegister(temp_var, argument_registers[i]));
             }
             */
-            
+
             match return_type {
                 Type::Undefined => {
                     instructions.push(TacInstruction::Call(function_label, arg_values, None));
@@ -736,10 +736,13 @@ fn generate_tac_for_rec_expr(
                 function_env,
                 variable_env,
             )?;
-            Ok(TacValue::ListAccess {
+            let temp_var = format!("t{}", temp_counter);
+            *temp_counter += 1;
+            instructions.push(TacInstruction::Assign(VariableValue::Variable(temp_var.clone()), TacValue::ListAccess {
                 list_variable: variable.clone(),
-                index: Box::new(index_value),
-            })
+                index: Box::new(index_value.clone()),
+            }));
+            Ok(TacValue::Variable(temp_var))
         }
 
         _ => Err(Error::SimpleError {
