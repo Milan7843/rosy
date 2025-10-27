@@ -245,6 +245,22 @@ fn get_register(variable_name: &String, register_allocation: &HashMap<String, is
 	}
 }
 
+fn is_live(register_allocation: &HashMap<String, isize>, liveness: &HashSet<VariableValue>, register: &Register) -> bool {
+	for var in liveness {
+		let var_name = match var {
+			VariableValue::Variable(name) => name,
+			VariableValue::VariableWithRequestedRegister(name, _) => name,
+		};
+		if let Some(&reg_num) = register_allocation.get(var_name) {
+			let reg = to_register(reg_num);
+			if &reg == register {
+				return true;
+			}
+		}
+	}
+	false
+}
+
 pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<String, isize>, liveness: &Vec<HashSet<VariableValue>>) -> Result<Vec<Instruction>, Error> {
 	let mut instructions = Vec::new();
 
@@ -625,18 +641,146 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 			}
 			TacInstruction::InstantiateStruct(var_name, elements) => {
 				let dest_name = match var_name {
-					// If dest has a requested register, use that
 					tac::VariableValue::Variable(name) => name,
 					tac::VariableValue::VariableWithRequestedRegister(name, _) => name,
 				};
 
 				let struct_reg = get_register(dest_name, register_allocation)?;
 
+				let mut registers_to_save = Vec::new();
+				let registers_overwrinting: [Register; 4] = [
+					Register::General(RegisterType::RCX, RegisterSize::QuadWord),
+					Register::General(RegisterType::RDX, RegisterSize::QuadWord),
+					Register::Extended(8, RegisterSize::QuadWord),
+					Register::Extended(9, RegisterSize::QuadWord),
+				];
 
-				// Allocate memory for the struct
+				// Check which of these registers are currently in use and need to be saved
+				for reg in registers_overwrinting.iter() {
+					if is_live(register_allocation, &liveness[instruction_index], reg) {
+						instructions.push(Instruction::Push(Argument::Register(reg.clone())));
+						registers_to_save.push(reg.clone());
+					}
+				}
+
+				// Start by allocating memory for the struct
+				// First we need the heap handle
+				instructions.push(Instruction::PreCallStackAlign(instruction_index));
+				instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
+				instructions.push(Instruction::ExternCall("GetProcessHeap".to_string()));
+				// Heap handle is now in RAX, must be moved to RCX for HeapAlloc
+				instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RCX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+
+				// We need to set the dwFlags to 0 for HeapAlloc to indicate default behaviour
+				let dw_flags = 0; // No special flags
+				instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Immediate(dw_flags)));
+
+				// Now the number of bytes we want to allocate
 				let struct_size = (elements.len() * 8) as i64; // Each element is 8 bytes
+				instructions.push(Instruction::Mov(Argument::Register(Register::Extended(8, RegisterSize::QuadWord)), Argument::Immediate(struct_size)));
+
+				instructions.push(Instruction::ExternCall("HeapAlloc".to_string()));
+
+				// Pointer to allocated struct is now in RAX
+				instructions.push(Instruction::Mov(Argument::Register(struct_reg), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+
+				instructions.push(Instruction::PostCallStackAlign(instruction_index));
+
+				// Restore the saved registers
+				for reg in registers_to_save.iter().rev() {
+					instructions.push(Instruction::Pop(Argument::Register(reg.clone())));
+				}
 			}
 			TacInstruction::InstantiateList(var, elements) => {
+				
+				let dest_name = match var {
+					tac::VariableValue::Variable(name) => name,
+					tac::VariableValue::VariableWithRequestedRegister(name, _) => name,
+				};
+
+				let struct_register = get_register(dest_name, register_allocation)?;
+
+				let mut registers_to_save = Vec::new();
+				let registers_overwrinting: [Register; 4] = [
+					Register::General(RegisterType::RCX, RegisterSize::QuadWord),
+					Register::General(RegisterType::RDX, RegisterSize::QuadWord),
+					Register::Extended(8, RegisterSize::QuadWord),
+					Register::Extended(9, RegisterSize::QuadWord),
+				];
+
+				// Check which of these registers are currently in use and need to be saved
+				for reg in registers_overwrinting.iter() {
+					if is_live(register_allocation, &liveness[instruction_index], reg) {
+						instructions.push(Instruction::Push(Argument::Register(reg.clone())));
+						registers_to_save.push(reg.clone());
+					}
+				}
+
+				// Start by allocating memory for the struct
+				// First we need the heap handle
+				instructions.push(Instruction::PreCallStackAlign(instruction_index));
+				instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
+				instructions.push(Instruction::ExternCall("GetProcessHeap".to_string()));
+				// Heap handle is now in RAX, must be moved to RCX for HeapAlloc
+				instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RCX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+
+				// We need to set the dwFlags to 0 for HeapAlloc to indicate default behaviour
+				let dw_flags = 0; // No special flags
+				instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Immediate(dw_flags)));
+
+				// Now the number of bytes we want to allocate
+				let struct_size = (elements.len() * 8) as i64; // Each element is 8 bytes
+				instructions.push(Instruction::Mov(Argument::Register(Register::Extended(8, RegisterSize::QuadWord)), Argument::Immediate(struct_size)));
+
+				instructions.push(Instruction::ExternCall("HeapAlloc".to_string()));
+
+				// Pointer to allocated list is now in RAX
+				// So we will update the pointer in the struct to reflect that (mov [struct_register], rax)
+				instructions.push(Instruction::Mov(Argument::MemoryAddressRegister(struct_register.clone()), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+
+				// Push RAX to save the list pointer for later use
+				instructions.push(Instruction::Push(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+
+				// TODO: this may not be necessary, as the struct should be initialized with this data
+				// We also need to set the length of the list, which is stored at offset 8 (mov [struct_register + 8], length)
+				// So we will move the struct pointer into rax first, so we can add the offset
+				instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(struct_register.clone())));
+				instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(8))); // Offset 8 for length
+				instructions.push(Instruction::Mov(Argument::MemoryAddressRegister(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(elements.len() as i64)));
+
+				// Get the list pointer back
+				instructions.push(Instruction::Pop(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+				
+				// Now we can fill in the elements of the list
+				let offset_reg = Register::General(RegisterType::RAX, RegisterSize::QuadWord);
+				instructions.push(Instruction::Mov(Argument::Register(offset_reg.clone()), Argument::Register(struct_register.clone())));
+				for (i, element) in elements.iter().enumerate() {
+					match element {
+						TacValue::Variable(var) => {
+							let src_reg = get_register(var, register_allocation)?;
+							// Write from the register into the memory address pointed to by RAX (mov [rax], src_reg)
+							instructions.push(Instruction::Mov(Argument::MemoryAddressRegister(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(src_reg)));
+							// Increment RAX by 8 for the next element
+							instructions.push(Instruction::Add(Argument::Register(offset_reg.clone()), Argument::Register(offset_reg.clone()), Argument::Immediate(8)));
+						}
+						TacValue::Constant(imm) => {
+							// Write from the register into the memory address pointed to by RAX (mov [rax], imm)
+							instructions.push(Instruction::Mov(Argument::MemoryAddressRegister(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(*imm)));
+							// Increment RAX by 8 for the next element
+							instructions.push(Instruction::Add(Argument::Register(offset_reg.clone()), Argument::Register(offset_reg.clone()), Argument::Immediate(8)));
+						}
+						_ => {
+							return Err(Error::SimpleError{message: format!("Unsupported TacValue in list element: {:?}", element)});
+						}
+					}
+				}
+
+				instructions.push(Instruction::PostCallStackAlign(instruction_index));
+
+				// Restore the saved registers
+				for reg in registers_to_save.iter().rev() {
+					instructions.push(Instruction::Pop(Argument::Register(reg.clone())));
+				}
 			}
 		}
 	}

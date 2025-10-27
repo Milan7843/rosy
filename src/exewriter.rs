@@ -254,6 +254,9 @@ fn write_headers(file: &mut File, machine_code: &mut Vec<u8>, syscalls_to_resolv
 			"ExitProcess".to_string(),
 			"GetStdHandle".to_string(),
 			"WriteFile".to_string(),
+			"HeapAlloc".to_string(),
+			"GetProcessHeap".to_string(),
+			"HeapFree".to_string(),
 		],
 		function_address_rvas: Vec::new(),
 	}];

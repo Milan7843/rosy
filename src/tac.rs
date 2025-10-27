@@ -658,8 +658,8 @@ fn generate_tac_for_rec_expr(
             ));
 
             instructions.push(TacInstruction::InstantiateList(
-                VariableValue::Variable(temp_var.clone()),
-                element_values,
+                VariableValue::Variable(temp_var.clone()), // The struct that the list will belong to
+                element_values, // The elements to put in the list
             ));
 
             Ok(TacValue::Variable(temp_var))
