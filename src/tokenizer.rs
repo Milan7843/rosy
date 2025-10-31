@@ -72,6 +72,7 @@ pub enum SymbolType {
     PlusEquals,
     True,
     False,
+    Struct,
 }
 
 #[derive(PartialEq, Clone, Debug)]
@@ -135,6 +136,7 @@ fn get_symbol_type(symbol: &String) -> Result<SymbolType, Error> {
         s if s == "+=" => Ok(SymbolType::PlusEquals),
         s if s == "true" => Ok(SymbolType::True),
         s if s == "false" => Ok(SymbolType::False),
+        s if s == "struct" => Ok(SymbolType::Struct),
         _ => Err(Error::SimpleError {
             message: format!("{} is not a Symbol", symbol),
         }),
@@ -175,6 +177,7 @@ pub fn get_symbol_from_type(symbol_type: &SymbolType) -> String {
         SymbolType::PlusEquals => String::from("+="),
         SymbolType::True => String::from("true"),
         SymbolType::False => String::from("false"),
+        SymbolType::Struct => String::from("struct"),
     }
 }
 

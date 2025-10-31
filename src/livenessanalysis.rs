@@ -47,6 +47,15 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Varia
                     TacValue::Variable(var) => {
                         liveness_before.insert(VariableValue::Variable(var.clone()));
                     }
+                    TacValue::ListAccess { list_variable, index } => {
+                        liveness_before.insert(VariableValue::Variable(list_variable.clone()));
+                        match &**index {
+                            TacValue::Variable(var) => {
+                                liveness_before.insert(VariableValue::Variable(var.clone()));
+                            }
+                            _ => {}
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -108,7 +117,12 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Varia
                     liveness_before.remove(ret_var);
                 }
                 for (arg_index, arg) in args.iter().enumerate() {
-                    liveness_before.insert(arg.clone());
+                    match arg {
+                        TacValue::Variable(v) => {
+                            liveness_before.insert(VariableValue::Variable(v.clone()));
+                        }
+                        _ => {}
+                    }
                 }
             }
             TacInstruction::ExternCall(function_name, args, return_var) => {
@@ -116,7 +130,12 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Varia
                     liveness_before.remove(ret_var);
                 }
                 for (arg_index, arg) in args.iter().enumerate() {
-                    liveness_before.insert(arg.clone());
+                    match arg {
+                        TacValue::Variable(v) => {
+                            liveness_before.insert(VariableValue::Variable(v.clone()));
+                        }
+                        _ => {}
+                    }
                 }
             }
             TacInstruction::ProgramStart() => {
@@ -124,6 +143,27 @@ pub fn analyze_liveness(instructions: &Vec<TacInstruction>) -> Vec<HashSet<Varia
             }
             TacInstruction::DirectInstruction(_) => {
                 // Direct instructions may affect liveness, but we don't analyze them here
+            }
+            TacInstruction::InstantiateList(_, elements) => {
+                for element in elements {
+                    match element {
+                        TacValue::Variable(v) => {
+                            liveness_before.insert(VariableValue::Variable(v.clone()));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            TacInstruction::InstantiateStruct(var, fields) => {
+                liveness_before.remove(var);
+                for field in fields {
+                    match field {
+                        TacValue::Variable(v) => {
+                            liveness_before.insert(VariableValue::Variable(v.clone()));
+                        }
+                        _ => {}
+                    }
+                }
             }
         }
 

@@ -13,10 +13,12 @@ use crate::uniquify;
 use crate::registerallocation::interferencegraph;
 use crate::registerallocation::variableclassifier;
 use crate::variablecollector;
+use crate::instructionsimplifier;
+use crate::instructionsimplifier::AssemblyInstruction;
 
 pub fn compile(
     base_expressions: (Vec<BaseExpr<Type>>, Vec<FunctionType>),
-) -> Result<Vec<Instruction>, Error> {
+) -> Result<Vec<AssemblyInstruction>, Error> {
     let tac_instructions = tac::generate_tac(base_expressions.0, base_expressions.1)?;
 
     let all_variable_names = variablecollector::collect_variable_names(&tac_instructions);
@@ -30,11 +32,15 @@ pub fn compile(
 
     let register_allocation = registerallocator::allocate_registers(&interference_graph, &function_arguments);
 
-    let instructions = codegenerator::generate_code(&tac_instructions, &register_allocation, &liveness)?;
+    let mut instructions = codegenerator::generate_code(&tac_instructions, &register_allocation, &liveness)?;
 
     codegenerator::print_instructions(&instructions);
 
-    return Ok(instructions);
+    let assembly_instructions = instructionsimplifier::to_assembly_instructions(&mut instructions);
+
+    instructionsimplifier::print_assembly_instructions(&assembly_instructions);
+
+    return Ok(assembly_instructions);
 }
 
 fn compile_base_expr(base_expr: BaseExpr<()>) -> Vec<Instruction> {

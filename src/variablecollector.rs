@@ -31,6 +31,12 @@ pub fn collect_variable_names(tac_instructions: &Vec<tac::TacInstruction>) -> st
 					variable_names.insert(tac::VariableValue::Variable(param.clone()));
 				}
 			}
+			tac::TacInstruction::Call(_, _, Some(ret_var)) => {
+				variable_names.insert(ret_var.clone());
+			}
+			tac::TacInstruction::ExternCall(_, _, Some(ret_var)) => {
+				variable_names.insert(ret_var.clone());
+			}
 			_ => {}
 		}
 	}

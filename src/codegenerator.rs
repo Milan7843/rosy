@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::hash::Hash;
 
 use crate::tac;
 use crate::tac::BinOp;
@@ -185,8 +186,10 @@ pub enum Argument {
 	Register(Register),
 	Immediate(i64),
 	Label(String),
-	MemoryAddressDirect(u64), // e.g., [rax], [rbx + 4]
-	MemoryAddressRegister(Register)
+	MemoryAddressDirect(u64),
+	MemoryAddressRegister(Register),
+	StackMemoryOffsetDirect(u64), // [rsp + offset]
+	StackMemoryOffsetRegister(Register), // [rsp + reg]
 }
 
 impl std::fmt::Display for Argument {
@@ -197,6 +200,8 @@ impl std::fmt::Display for Argument {
 			Argument::Label(name) => write!(f, "{}", name),
 			Argument::MemoryAddressDirect(addr) => write!(f, "[{}]", addr),
 			Argument::MemoryAddressRegister(reg) => write!(f, "[{}]", reg),
+			Argument::StackMemoryOffsetDirect(offset) => write!(f, "[rsp + {}]", offset),
+			Argument::StackMemoryOffsetRegister(reg) => write!(f, "[rsp + {}]", reg),
 		}
 	}
 }
@@ -204,14 +209,14 @@ impl std::fmt::Display for Argument {
 #[derive(PartialEq, Debug, Clone)]
 pub enum Instruction {
 	Mov(Argument, Argument), // dest, src
-	Add(Argument, Argument), // dest, src
-	Sub(Argument, Argument), // dest, src
-	Mul(Argument, Argument), // dest, src
+	Add(Argument, Argument, Argument), // dest, src1, src2
+	Sub(Argument, Argument, Argument), // dest, src1, src2
+	Mul(Argument, Argument, Argument), // dest, src1, src2
 	Div(Argument, Argument, Argument, Argument), // quotient dest, remainder dest, value src, div src
-	Xor(Argument, Argument), // dest, src
-	And(Argument, Argument), // dest, src
-	Or(Argument, Argument),  // dest, src
-	Not(Argument),           // src
+	Xor(Argument, Argument, Argument), // dest, src1, src2
+	And(Argument, Argument, Argument), // dest, src1, src2
+	Or(Argument, Argument, Argument),  // dest, src1, src2
+	Not(Argument, Argument),           // dest, src1, src2
 	Cmp(Argument, Argument), // op1, op2
 	Jmp(String),           // label
 	Je(String),            // label
@@ -220,14 +225,18 @@ pub enum Instruction {
 	Jge(String),           // label
 	Jl(String),            // label
 	Jle(String),           // label
+	Sete(Argument),  // dest (set to 1 if equal)
 	Ret,
 	Push(Argument), // value or register
 	Pop(Argument),  // register
-	Label(String),  // label name
+	Label(String, Option<usize>),  // label name, optional number of stack-passed arguments (for a function, required for stack cleanup)
 	ExternCall(String), // name of the syscall function (used for IAT)
 	Call(String),   // function name
 	Nop,
-	ProgramStart
+	ProgramStart,
+	PreCallStackAlign(usize), // ID (to link with PostCallStackAlign)
+	PostCallStackAlign(usize), // ID
+	Comment(String)
 }
 
 fn get_register(variable_name: &String, register_allocation: &HashMap<String, isize>) -> Result<Register, Error> {
@@ -236,6 +245,22 @@ fn get_register(variable_name: &String, register_allocation: &HashMap<String, is
 	} else {
 		Err(Error::SimpleError{message: format!("Variable {} not found in register allocation", variable_name)})
 	}
+}
+
+fn is_live(register_allocation: &HashMap<String, isize>, liveness: &HashSet<VariableValue>, register: &Register) -> bool {
+	for var in liveness {
+		let var_name = match var {
+			VariableValue::Variable(name) => name,
+			VariableValue::VariableWithRequestedRegister(name, _) => name,
+		};
+		if let Some(&reg_num) = register_allocation.get(var_name) {
+			let reg = to_register(reg_num);
+			if &reg == register {
+				return true;
+			}
+		}
+	}
+	false
 }
 
 pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<String, isize>, liveness: &Vec<HashSet<VariableValue>>) -> Result<Vec<Instruction>, Error> {
@@ -250,10 +275,9 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				instructions.push(Instruction::ProgramStart); // Placeholder for program start
 			}
 			TacInstruction::Label(name) => {
-				instructions.push(Instruction::Label(name.clone()));
+				instructions.push(Instruction::Label(name.clone(), None));
 			}
 			TacInstruction::FunctionLabel(name, params) => {
-				instructions.push(Instruction::Label(name.clone()));
 				// Now we need to move the parameters from their argument registers to their allocated registers
 				let arg_registers = [
 					Register::General(RegisterType::RCX, RegisterSize::QuadWord),
@@ -261,18 +285,74 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 					Register::Extended(8, RegisterSize::QuadWord),  // r8
 					Register::Extended(9, RegisterSize::QuadWord),  // r9
 				];
+
+				let num_stack_passed_args = if params.len() > arg_registers.len() {
+					params.len() - arg_registers.len()
+				} else {
+					0
+				};
+
+				instructions.push(Instruction::Label(name.clone(), if num_stack_passed_args == 0 { None } else { Some(num_stack_passed_args) }));
+
+				let num_register_params = std::cmp::min(params.len(), arg_registers.len());
+
+				// Sometimes arguments are supposed to be written to local variables that are also used as later arguments
+				// Thus, these need to be saved in order to not be overwritten
+				// This is done here by saving (pushing) all conflicting argument registers
+				// And popping them after all argument registers are done being used
+				let mut pushed_arguments_to_recover: Vec<Register> = Vec::new();
+
 				for (i, param) in params.iter().enumerate() {
+
 					if let Some(&reg_num) = register_allocation.get(param) {
 						let dest_reg = to_register(reg_num);
 						if i < arg_registers.len() {
-							// Move from argument register to allocated register
-							instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Register(arg_registers[i].clone())));
+							// Check whether the destination is still necessary later
+							let mut is_needed = false;
+							// Loop over all leftover argument registers to see if they are used later
+							for j in i+1..num_register_params {
+								if dest_reg == arg_registers[j] {
+									is_needed = true;
+									break;
+								}
+							}
+
+							// If it is still needed later, we will simply push the argument value onto the stack and recover it after
+							if is_needed {
+								instructions.push(Instruction::Push(Argument::Register(arg_registers[i].clone())));
+								pushed_arguments_to_recover.push(dest_reg.clone());
+							}
+							else {
+								// Move from argument register to allocated register
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Register(arg_registers[i].clone())));
+							}
 						} else {
-							// Parameter passed on stack, need to load from [rsp + offset]
-							let stack_offset = ((i - arg_registers.len()) * 8) as u64;
-							// TODO can also just pop this
-							instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::MemoryAddressDirect(stack_offset)));
+							break;
 						}
+					} else {
+						return Err(Error::SimpleError{message: format!("Function parameter {} not found in register allocation", param)});
+					}
+
+					// If this was the final register passed parameter, check if any need to be popped
+					if (i == num_register_params - 1) && !pushed_arguments_to_recover.is_empty() {
+						// Recover any pushed arguments now
+						for reg in pushed_arguments_to_recover.iter().rev() {
+							instructions.push(Instruction::Pop(Argument::Register(reg.clone())));
+						}
+						pushed_arguments_to_recover.clear();
+					}
+				}
+				// Recover any arguments passed on the stack
+				for (i, param) in params.iter().enumerate() {
+					if i < arg_registers.len() {
+						continue;
+					}
+
+					if let Some(&reg_num) = register_allocation.get(param) {
+						let dest_reg = to_register(reg_num);
+						let stack_index = i - arg_registers.len();
+						// Move from stack to allocated register
+						instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::StackMemoryOffsetDirect(8 * stack_index as u64 + 8 + 32))); // +8 for return address, +32 for shadow space
 					} else {
 						return Err(Error::SimpleError{message: format!("Function parameter {} not found in register allocation", param)});
 					}
@@ -293,6 +373,59 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 						let src_reg = get_register(var, register_allocation)?;
 						instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Register(src_reg)));
 					}
+					TacValue::ListAccess { list_variable, index } => {
+
+						instructions.push(Instruction::Comment(format!("Accessing list element of {} at index {:?}", list_variable, index)));
+
+						let list_reg = get_register(list_variable, register_allocation)?;
+
+						match &**index {
+							TacValue::Constant(imm_index) => {
+								// Calculate address: [list_reg + imm_index * 8]
+
+								// We need to find the absolute address of the list, so first we need to dereference list_reg to get the struct address
+								instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::MemoryAddressRegister(list_reg)));
+								
+								// TODO: Handle out of bounds?
+								let offset = *imm_index * 8;
+								// Now RAX holds the address of the list data, so we can add the offset to it
+								instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(offset)));
+
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::MemoryAddressRegister(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+							}
+							TacValue::Variable(var_index) => {
+								instructions.push(Instruction::Comment("Accessing list element with variable index".to_string()));
+
+								let index_reg = get_register(var_index, register_allocation)?;
+								
+								// Going to use RBX as a temporary register to hold the list address, so need to save it if it's live
+								let save_rbx = is_live(register_allocation, &liveness[instruction_index + 1], &Register::General(RegisterType::RBX, RegisterSize::QuadWord));
+								if save_rbx {
+									instructions.push(Instruction::Push(Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord))));
+								}
+
+								// Mov rax, index_reg
+								instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(index_reg.clone())));
+								// Mul rax, 8
+								instructions.push(Instruction::Mul(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(8)));
+								// Mov rbx, [list_reg] ; get list address
+								instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord)), Argument::MemoryAddressRegister(list_reg)));
+								// Add rax, rbx ; add offset
+								instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord))));
+								// Mov dest_reg, [rax]
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::MemoryAddressRegister(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+
+								if save_rbx {
+									instructions.push(Instruction::Pop(Argument::Register(Register::General(RegisterType::RBX, RegisterSize::QuadWord))));
+								}
+							}
+							_ => {
+								return Err(Error::SimpleError{message: format!("Unsupported TacValue for list index: {:?}", index)});
+							}
+						}
+
+						instructions.push(Instruction::Comment("Finish accessing list element".to_string()));
+					}
 					_ => {
 						return Err(Error::SimpleError{message: format!("Unsupported TacValue in Assign: {:?}", value)});
 					}
@@ -305,76 +438,149 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 					tac::VariableValue::VariableWithRequestedRegister(name, _) => name,
 				};
 				let dest_reg = get_register(dest_name, register_allocation)?;
+
 				match (left, right) {
-					// If we want to add two variables into a third, we first move one into the dest register, then add the other
+					// If we want to add two variables into a third, we first move one into the rax register, then add the other, then move rax to the destination
 					(TacValue::Variable(var_left), TacValue::Variable(var_right)) => {
 						let left_reg = get_register(var_left, register_allocation)?;
 						let right_reg = get_register(var_right, register_allocation)?;
-						// Move left operand to dest register
-						instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Register(left_reg.clone())));
-						// Perform operation with right operand
+						
 						match op {
-							BinOp::Add => instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Register(right_reg))),
-							BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Register(right_reg))),
-							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Register(right_reg))),
-							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(left_reg), Argument::Register(right_reg))),
-							_ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
-						};
+							BinOp::Add => {
+								instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Register(left_reg), Argument::Register(right_reg)));
+							}
+							BinOp::Sub => {
+								instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Register(left_reg), Argument::Register(right_reg)));
+							}
+							BinOp::Mul => {
+								instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Register(left_reg), Argument::Register(right_reg)));
+							}
+							BinOp::Div => {
+								instructions.push(Instruction::Div(Argument::Register(dest_reg.clone()), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(left_reg), Argument::Register(right_reg)));
+							}
+							BinOp::Or => {
+								instructions.push(Instruction::Or(Argument::Register(dest_reg), Argument::Register(left_reg), Argument::Register(right_reg)));
+							}
+							BinOp::And => {
+								instructions.push(Instruction::And(Argument::Register(dest_reg), Argument::Register(left_reg), Argument::Register(right_reg)));
+							}
+							BinOp::Eq => {
+								// Compare left and right
+								instructions.push(Instruction::Cmp(Argument::Register(left_reg), Argument::Register(right_reg)));
+								// Set dest_reg to 1 if equal, 0 otherwise
+								instructions.push(Instruction::Sete(Argument::Register(dest_reg)));
+							}
+							_ => {
+								return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)});
+							}
+						}
 					}
 					(TacValue::Variable(var_left), TacValue::Constant(imm_right)) => {
 						let left_reg = get_register(var_left, register_allocation)?;
-						// Perform operation with immediate right operand
+						
 						match op {
 							BinOp::Add => {
-								// Move left operand to dest register
-								instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Register(left_reg.clone())));
-								instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64)));
+								instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Register(left_reg), Argument::Immediate(*imm_right)));
 							}
 							BinOp::Sub => {
-								// Move left operand to dest register
-								instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Register(left_reg.clone())));
-								instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64)));
+								instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Register(left_reg), Argument::Immediate(*imm_right)));
 							}
-							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
-							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg.clone()), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(left_reg),Argument::Register(dest_reg))),
-							_ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
-						};
+							BinOp::Mul => {
+								instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Register(left_reg), Argument::Immediate(*imm_right)));
+							}
+							BinOp::Div => {
+								instructions.push(Instruction::Div(Argument::Register(dest_reg.clone()), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(left_reg), Argument::Immediate(*imm_right)));
+							}
+							BinOp::Or => {
+								instructions.push(Instruction::Or(Argument::Register(dest_reg), Argument::Register(left_reg), Argument::Immediate(*imm_right)));
+							}
+							BinOp::And => {
+								instructions.push(Instruction::And(Argument::Register(dest_reg), Argument::Register(left_reg), Argument::Immediate(*imm_right)));
+							}
+							BinOp::Eq => {
+								// Compare left and right
+								instructions.push(Instruction::Cmp(Argument::Register(left_reg), Argument::Immediate(*imm_right)));
+								// Set dest_reg to 1 if equal, 0 otherwise
+								instructions.push(Instruction::Sete(Argument::Register(dest_reg)));
+							}
+							_ => {
+								return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)});
+							}
+						}
 					}
 					(TacValue::Constant(imm_left), TacValue::Variable(var_right)) => {
 						let right_reg = get_register(var_right, register_allocation)?;
-						// Perform operation with right operand
+
 						match op {
 							BinOp::Add => {
-								// Move left immediate to dest register
-								instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Immediate(*imm_left as i64)));
-								instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Register(right_reg)));
+								instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Register(right_reg), Argument::Immediate(*imm_left as i64)));
 							}
 							BinOp::Sub => {
-								// Move left immediate to dest register
-								instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Immediate(*imm_left as i64)));
-								instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Register(right_reg)));
+								instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Immediate(*imm_left as i64), Argument::Register(right_reg)));
 							}
-							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Immediate(*imm_left as i64))),
-							BinOp::Div => instructions.push(Instruction::Div(Argument::Register(dest_reg.clone()), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(dest_reg), Argument::Register(right_reg))),
-							_ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
-						};
-					}
-					(TacValue::Constant(imm_left), TacValue::Constant(imm_right)) => {
-						// Move left immediate to dest register
-						instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Immediate(*imm_left as i64)));
-						// Perform operation with right immediate
-						match op {
-							BinOp::Add => instructions.push(Instruction::Add(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
-							BinOp::Sub => instructions.push(Instruction::Sub(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
-							BinOp::Mul => instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Immediate(*imm_right as i64))),
+							BinOp::Mul => {
+								instructions.push(Instruction::Mul(Argument::Register(dest_reg), Argument::Register(right_reg), Argument::Immediate(*imm_left as i64)));
+							}
 							BinOp::Div => {
-								// TODO for division maybe rdx should be saved?
 								// For division, we need to move the left immediate into RAX first
 								instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(*imm_left as i64)));
-								instructions.push(Instruction::Div(Argument::Register(dest_reg), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(*imm_right as i64)));
+								instructions.push(Instruction::Div(Argument::Register(dest_reg.clone()), Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(right_reg)));
 							}
-							_ => return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)}),
-						};
+							BinOp::Or => {
+								instructions.push(Instruction::Or(Argument::Register(dest_reg), Argument::Immediate(*imm_left as i64), Argument::Register(right_reg)));
+							}
+							BinOp::And => {
+								instructions.push(Instruction::And(Argument::Register(dest_reg), Argument::Immediate(*imm_left as i64), Argument::Register(right_reg)));
+							}
+							BinOp::Eq => {
+								// Compare left and right
+								instructions.push(Instruction::Cmp(Argument::Immediate(*imm_left as i64), Argument::Register(right_reg)));
+								// Set dest_reg to 1 if equal, 0 otherwise
+								instructions.push(Instruction::Sete(Argument::Register(dest_reg)));
+							}
+							_ => {
+								return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)});
+							}
+						}
+					}
+					(TacValue::Constant(imm_left), TacValue::Constant(imm_right)) => {
+
+						match op {
+							BinOp::Add => {
+								let result = *imm_left + *imm_right;
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Immediate(result as i64)));
+							}
+							BinOp::Sub => {
+								let result = *imm_left - *imm_right;
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Immediate(result as i64)));
+							}
+							BinOp::Mul => {
+								let result = *imm_left * *imm_right;
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Immediate(result as i64)));
+							}
+							BinOp::Div => {
+								if *imm_right == 0 {
+									return Err(Error::SimpleError{message: "Division by zero".to_string()});
+								}
+								let result = *imm_left / *imm_right;
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Immediate(result as i64)));
+							}
+							BinOp::Or => {
+								let result = *imm_left | *imm_right;
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Immediate(result as i64)));
+							}
+							BinOp::And => {
+								let result = *imm_left & *imm_right;
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Immediate(result as i64)));
+							}
+							BinOp::Eq => {
+								let result = if imm_left == imm_right { 1 } else { 0 };
+								instructions.push(Instruction::Mov(Argument::Register(dest_reg), Argument::Immediate(result as i64)));
+							}
+							_ => {
+								return Err(Error::SimpleError{message: format!("Unsupported binary operation: {:?}", op)});
+							}
+						}
 					}
 					_ => {
 						return Err(Error::SimpleError{message: format!("Unsupported TacValue combination in BinOp: {:?}, {:?}", left, right)});
@@ -410,24 +616,30 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				match operand {
 					TacValue::Variable(var) => {
 						let src_reg = get_register(var, register_allocation)?;
-						instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Register(src_reg)));
+						match operator {
+							UnOp::Not => {
+								instructions.push(Instruction::Not(Argument::Register(dest_reg), Argument::Register(src_reg)));
+							}
+							UnOp::Neg => {
+								instructions.push(Instruction::Sub(Argument::Register(dest_reg.clone()), Argument::Immediate(0), Argument::Register(src_reg)));
+							}
+							_ => {
+								return Err(Error::SimpleError{message: format!("Unsupported unary operation: {:?}", operator)});
+							}
+						}
 					}
 					TacValue::Constant(imm) => {
-						instructions.push(Instruction::Mov(Argument::Register(dest_reg.clone()), Argument::Immediate(*imm as i64)));
+						match operator {
+							UnOp::Not => {
+								instructions.push(Instruction::Not(Argument::Register(dest_reg), Argument::Immediate(*imm as i64)));
+							}
+							_ => {
+								return Err(Error::SimpleError{message: format!("Unsupported unary operation: {:?}", operator)});
+							}
+						}
 					}
 					_ => {
 						return Err(Error::SimpleError{message: format!("Unsupported TacValue in UnaryOp: {:?}", operand)});
-					}
-				}
-				match operator {
-					UnOp::Neg => {
-						instructions.push(Instruction::Sub(Argument::Register(dest_reg.clone()), Argument::Immediate(0)));
-					}
-					UnOp::Not => {
-						instructions.push(Instruction::Not(Argument::Register(dest_reg.clone())));
-					}
-					_ => {
-						return Err(Error::SimpleError{message: format!("Unsupported unary operation: {:?}", operator)});
 					}
 				}
 			}
@@ -507,6 +719,173 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 				let dest_reg = get_register(dest_name, register_allocation)?;
 				instructions.push(Instruction::Pop(Argument::Register(dest_reg)));
 			}
+			TacInstruction::InstantiateStruct(var_name, elements) => {
+
+				instructions.push(Instruction::Comment("Start instantiating struct".to_string()));
+
+				let dest_name = match var_name {
+					tac::VariableValue::Variable(name) => name,
+					tac::VariableValue::VariableWithRequestedRegister(name, _) => name,
+				};
+
+				let struct_reg = get_register(dest_name, register_allocation)?;
+
+				let mut registers_to_save = Vec::new();
+				let registers_overwrinting: [Register; 4] = [
+					Register::General(RegisterType::RCX, RegisterSize::QuadWord),
+					Register::General(RegisterType::RDX, RegisterSize::QuadWord),
+					Register::Extended(8, RegisterSize::QuadWord),
+					Register::Extended(9, RegisterSize::QuadWord),
+				];
+
+				// Check which of these registers are currently in use and need to be saved
+				for reg in registers_overwrinting.iter() {
+					if is_live(register_allocation, &liveness[instruction_index], reg) {
+						instructions.push(Instruction::Push(Argument::Register(reg.clone())));
+						registers_to_save.push(reg.clone());
+					}
+				}
+
+				// Start by allocating memory for the struct
+				// First we need the heap handle
+				instructions.push(Instruction::PreCallStackAlign(instruction_index));
+				instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
+				instructions.push(Instruction::ExternCall("GetProcessHeap".to_string()));
+				instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
+				instructions.push(Instruction::PostCallStackAlign(instruction_index));
+				// Heap handle is now in RAX, must be moved to RCX for HeapAlloc
+				instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RCX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+
+				// We need to set the dwFlags to 0 for HeapAlloc to indicate default behaviour
+				let dw_flags = 0; // No special flags
+				instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Immediate(dw_flags)));
+
+				// Now the number of bytes we want to allocate
+				let struct_size = (elements.len() * 8) as i64; // Each element is 8 bytes
+				instructions.push(Instruction::Mov(Argument::Register(Register::Extended(8, RegisterSize::QuadWord)), Argument::Immediate(struct_size)));
+
+				instructions.push(Instruction::PreCallStackAlign(instruction_index + tac.len()));
+				instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
+				instructions.push(Instruction::ExternCall("HeapAlloc".to_string()));
+				instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
+				instructions.push(Instruction::PostCallStackAlign(instruction_index + tac.len()));
+
+				// Pointer to allocated struct is now in RAX
+				instructions.push(Instruction::Mov(Argument::Register(struct_reg), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+
+				// Restore the saved registers
+				for reg in registers_to_save.iter().rev() {
+					instructions.push(Instruction::Pop(Argument::Register(reg.clone())));
+				}
+
+				instructions.push(Instruction::Comment("Finish instantiating struct".to_string()));
+			}
+			TacInstruction::InstantiateList(var, elements) => {
+
+				instructions.push(Instruction::Comment("Start instantiating list".to_string()));
+				
+				let dest_name = match var {
+					tac::VariableValue::Variable(name) => name,
+					tac::VariableValue::VariableWithRequestedRegister(name, _) => name,
+				};
+
+				let struct_register = get_register(dest_name, register_allocation)?;
+
+				let mut registers_to_save = Vec::new();
+				let registers_overwrinting: [Register; 4] = [
+					Register::General(RegisterType::RCX, RegisterSize::QuadWord),
+					Register::General(RegisterType::RDX, RegisterSize::QuadWord),
+					Register::Extended(8, RegisterSize::QuadWord),
+					Register::Extended(9, RegisterSize::QuadWord),
+				];
+
+				// Check which of these registers are currently in use and need to be saved
+				for reg in registers_overwrinting.iter() {
+					if is_live(register_allocation, &liveness[instruction_index], reg) {
+						instructions.push(Instruction::Push(Argument::Register(reg.clone())));
+						registers_to_save.push(reg.clone());
+					}
+				}
+
+				// Push the variable holding the struct pointer to save it
+				instructions.push(Instruction::Push(Argument::Register(struct_register.clone())));
+
+				// Start by allocating memory for the struct
+				// First we need the heap handle
+				instructions.push(Instruction::PreCallStackAlign(instruction_index));
+				instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
+				instructions.push(Instruction::ExternCall("GetProcessHeap".to_string()));
+				instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
+				instructions.push(Instruction::PostCallStackAlign(instruction_index));
+				// Heap handle is now in RAX, must be moved to RCX for HeapAlloc
+				instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RCX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+
+				// We need to set the dwFlags to 0 for HeapAlloc to indicate default behaviour
+				let dw_flags = 0; // No special flags
+				instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RDX, RegisterSize::QuadWord)), Argument::Immediate(dw_flags)));
+
+				// Now the number of bytes we want to allocate
+				let struct_size = (elements.len() * 8) as i64; // Each element is 8 bytes
+				instructions.push(Instruction::Mov(Argument::Register(Register::Extended(8, RegisterSize::QuadWord)), Argument::Immediate(struct_size)));
+
+				instructions.push(Instruction::PreCallStackAlign(instruction_index + tac.len()));
+				instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
+				instructions.push(Instruction::ExternCall("HeapAlloc".to_string()));
+				instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(32))); // Shadow space
+				instructions.push(Instruction::PostCallStackAlign(instruction_index + tac.len()));
+
+				// Get the struct pointer back
+				instructions.push(Instruction::Pop(Argument::Register(struct_register.clone())));
+
+				// Pointer to allocated list is now in RAX
+				// So we will update the pointer in the struct to reflect that (mov [struct_register], rax)
+				instructions.push(Instruction::Mov(Argument::MemoryAddressRegister(struct_register.clone()), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+
+				// Push RAX to save the list pointer for later use
+				instructions.push(Instruction::Push(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+
+				// TODO: this may not be necessary, as the struct should be initialized with this data
+				// We also need to set the length of the list, which is stored at offset 8 (mov [struct_register + 8], length)
+				// So we will move the struct pointer into rax first, so we can add the offset
+				instructions.push(Instruction::Mov(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(struct_register.clone())));
+				instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(8))); // Offset 8 for length
+				instructions.push(Instruction::Mov(Argument::MemoryAddressRegister(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(elements.len() as i64)));
+
+				// Get the list pointer back
+				instructions.push(Instruction::Pop(Argument::Register(Register::General(RegisterType::RAX, RegisterSize::QuadWord))));
+				
+				// Now we can fill in the elements of the list
+				let offset_reg = Register::General(RegisterType::RAX, RegisterSize::QuadWord);
+				//instructions.push(Instruction::Mov(Argument::Register(offset_reg.clone()), Argument::Register(struct_register.clone())));
+				for (i, element) in elements.iter().enumerate() {
+					println!("writing element {:?}", element);
+					match element {
+						TacValue::Variable(var) => {
+							let src_reg = get_register(var, register_allocation)?;
+							// Write from the register into the memory address pointed to by RAX (mov [rax], src_reg)
+							instructions.push(Instruction::Mov(Argument::MemoryAddressRegister(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Register(src_reg)));
+							// Increment RAX by 8 for the next element
+							instructions.push(Instruction::Add(Argument::Register(offset_reg.clone()), Argument::Register(offset_reg.clone()), Argument::Immediate(8)));
+						}
+						TacValue::Constant(imm) => {
+							// Write from the register into the memory address pointed to by RAX (mov [rax], imm)
+							instructions.push(Instruction::Mov(Argument::MemoryAddressRegister(Register::General(RegisterType::RAX, RegisterSize::QuadWord)), Argument::Immediate(*imm)));
+							// Increment RAX by 8 for the next element
+							instructions.push(Instruction::Add(Argument::Register(offset_reg.clone()), Argument::Register(offset_reg.clone()), Argument::Immediate(8)));
+						}
+						_ => {
+							return Err(Error::SimpleError{message: format!("Unsupported TacValue in list element: {:?}", element)});
+						}
+					}
+				}
+
+				// Restore the saved registers
+				for reg in registers_to_save.iter().rev() {
+					instructions.push(Instruction::Pop(Argument::Register(reg.clone())));
+				}
+
+				instructions.push(Instruction::Comment("Finish instantiating list".to_string()));
+			}
 		}
 	}
 
@@ -522,7 +901,7 @@ pub fn generate_code(tac: &Vec<TacInstruction>, register_allocation: &HashMap<St
 fn generate_code_for_call(
 	instructions: &mut Vec<Instruction>,
 	func_name: &String,
-	args: &Vec<VariableValue>,
+	args: &Vec<TacValue>,
 	return_var: &Option<tac::VariableValue>,
 	register_allocation: &HashMap<String, isize>,
 	liveness: &Vec<HashSet<VariableValue>>,
@@ -555,9 +934,107 @@ fn generate_code_for_call(
 			saved_registers.push(reg.clone());
 		}
 	}
-	
-	// reserve 32-byte shadow + 8 for alignment
-	instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
+
+	// Make sure that the stack is aligned here
+	let stack_alignment_id = instruction_index; // Unique ID for this call site
+	instructions.push(Instruction::PreCallStackAlign(stack_alignment_id));
+
+	let arg_registers = [
+		Register::General(RegisterType::RCX, RegisterSize::QuadWord),
+		Register::General(RegisterType::RDX, RegisterSize::QuadWord),
+		Register::Extended(8, RegisterSize::QuadWord),  // r8
+		Register::Extended(9, RegisterSize::QuadWord),  // r9
+	];
+
+	let num_stack_passed_args = if args.len() > arg_registers.len() {
+		args.len() - arg_registers.len()
+	} else {
+		0
+	};
+
+	println!("Generating call to {} with {} args ({} on stack)", func_name, args.len(), num_stack_passed_args);
+
+	// And we still need to maintain alignment if we will push an odd number of stack arguments
+	let need_to_align_stack_from_pushed_args = (num_stack_passed_args % 2) == 1;
+	let mut stack_space_necessary = num_stack_passed_args * 8;
+	if need_to_align_stack_from_pushed_args {
+		stack_space_necessary += 8;
+	}
+
+	stack_space_necessary += 32; // Shadow space
+
+	// Adjust stack pointer for shadow space and arguments
+	instructions.push(Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(stack_space_necessary as i64)));
+
+	// We start by pushing the stack-passed arguments onto the stack
+	for (i, argument) in args.iter().enumerate() {
+		// Only do the stack-passed values now
+		if i >= arg_registers.len() {
+
+			let mut stack_offset = (i - arg_registers.len()) * 8;
+			stack_offset += 32; // Shadow space
+
+			match argument {
+				TacValue::Variable(var) => {
+					let src_reg = get_register(var, register_allocation)?;
+					instructions.push(Instruction::Mov(Argument::StackMemoryOffsetDirect(stack_offset as u64), Argument::Register(src_reg)));
+				}
+				TacValue::Constant(imm) => {
+					instructions.push(Instruction::Mov(Argument::StackMemoryOffsetDirect(stack_offset as u64), Argument::Immediate(*imm as i64)));
+				}
+				_ => {
+					return Err(Error::SimpleError{message: format!("Unsupported TacValue in function call argument: {:?}", argument)});
+				}
+			}
+		}
+	}
+
+	// Write the arguments to the correct registers
+	let num_register_args = std::cmp::min(args.len(), arg_registers.len());
+
+	// First we find which argument registers are necessary later on, to avoid overwriting them prematurely
+	let mut arguments_to_pop: Vec<usize> = Vec::new();
+
+	for (i, argument) in args.iter().enumerate() {
+		match argument {
+			TacValue::Variable(var) => {
+				let src_reg = get_register(var, register_allocation)?;
+
+				for j in 0..num_register_args {
+					if src_reg == arg_registers[j] {// && i < args.len() - 1 {
+						// This argument register is needed later, so push it and mark it as to be popped later
+						instructions.push(Instruction::Push(Argument::Register(arg_registers[j].clone())));
+						arguments_to_pop.push(j);
+					}
+				}
+			}
+			_ => {}
+		}
+	}
+
+	// Now we can move the arguments into the correct registers
+	for (i, argument) in args.iter().enumerate() {
+		// Only do the register-passed values now, as we still have items on the stack left to pop
+		if i < arg_registers.len() {
+			match argument {
+				TacValue::Variable(var) => {
+					let src_reg = get_register(var, register_allocation)?;
+					instructions.push(Instruction::Mov(Argument::Register(arg_registers[i].clone()), Argument::Register(src_reg)));
+				}
+				TacValue::Constant(imm) => {
+					instructions.push(Instruction::Mov(Argument::Register(arg_registers[i].clone()), Argument::Immediate(*imm as i64)));
+				}
+				_ => {
+					return Err(Error::SimpleError{message: format!("Unsupported TacValue in function call argument: {:?}", argument)});
+				}
+			}
+		}
+	}
+
+	// Finally we can pop the saved argument registers back
+	for arg_reg_index in arguments_to_pop.iter().rev() {
+		instructions.push(Instruction::Pop(Argument::Register(arg_registers[*arg_reg_index].clone())));
+	}
 
 	// Call the function
 	if is_syscall {
@@ -568,8 +1045,11 @@ fn generate_code_for_call(
 		instructions.push(Instruction::Call(func_name.clone()));
 	}
 
-	// Restore the stack pointer
-	instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(40)));
+	// Restore stack from pushed arguments, if needed
+	instructions.push(Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(stack_space_necessary as i64)));
+
+	// Restore stack alignment after call
+	instructions.push(Instruction::PostCallStackAlign(stack_alignment_id));
 
 
 	// Restore saved caller-saved registers
@@ -593,40 +1073,46 @@ fn generate_code_for_call(
 fn ensure_stack_alignment(instructions: &mut Vec<Instruction>) {
 	// Count pushes and pops to determine current stack alignment
 	let mut stack_offset: i64 = 0;
-	let mut instruction_index_offset: usize = 0;
 	let instructions_copy = instructions.clone();
+
+	let mut offset_per_id: HashMap<usize, i64> = HashMap::new();
+
 	for (index, instr) in instructions_copy.iter().enumerate() {
 		match instr {
-			Instruction::Push(_) => stack_offset -= 8,
-			Instruction::Pop(_) => stack_offset += 8,
-			Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(imm)) => {
+			Instruction::Push(_) => stack_offset += 8,
+			Instruction::Pop(_) => stack_offset -= 8,
+			Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(imm)) => {
 				stack_offset += *imm;
 			}
-			Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(imm)) => {
+			Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(imm)) => {
 				stack_offset -= *imm;
 			}
-			Instruction::Call(_) => {
-				if stack_offset % 16 == 0 {
+			Instruction::PreCallStackAlign(id) => {
+				if stack_offset % 16 == 8 {
+					offset_per_id.insert(*id, 0);
 					continue; // Already aligned
 				}
-				print!("Aligning stack before call at instruction {}. Current offset: {}\n", index + instruction_index_offset, stack_offset);
-				let adjustment = (16 - stack_offset.rem_euclid(16)) % 16;
-				instructions.insert(index + instruction_index_offset, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(adjustment)));
-				instructions.insert(index + 2 + instruction_index_offset, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(adjustment)));
-				instruction_index_offset += 2; // Account for the two new instructions
+				let misalignment = (stack_offset + 8) % 16;
+				print!("Aligning stack before call at instruction {}. Current offset: {}\n", index, stack_offset);
+				let adjustment = misalignment;
+
+				instructions[index] = Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(adjustment));
+				offset_per_id.insert(*id, adjustment);
 			}
-			Instruction::ExternCall(_) => {
-				if stack_offset % 16 == 0 {
-					continue; // Already aligned
+			Instruction::PostCallStackAlign(id) => {
+				// No action needed here since we handle it in PreCallStackAlign
+				if let Some(adjustment) = offset_per_id.remove(&id) {
+					if adjustment == 0 {
+						continue; // No adjustment was made
+					}
+					print!("Restoring stack after call at instruction {}. Adjustment was: {}\n", index, adjustment);
+					instructions[index] = Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(adjustment));
 				}
-				print!("Aligning stack before extern call at instruction {}. Current offset: {}\n", index + instruction_index_offset, stack_offset);
-				let adjustment = (16 - stack_offset.rem_euclid(16)) % 16;
-				instructions.insert(index + instruction_index_offset, Instruction::Sub(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(adjustment)));
-				instructions.insert(index + 2 + instruction_index_offset, Instruction::Add(Argument::Register(Register::General(RegisterType::RSP, RegisterSize::QuadWord)), Argument::Immediate(adjustment)));
-				instruction_index_offset += 2; // Account for the two new instructions
 			}
 			_ => {}
 		}
+		print_instruction(instr);
+		println!("Stack offset: {}", stack_offset);
 	}
 }
 
@@ -639,31 +1125,31 @@ pub fn print_instructions(instructions: &Vec<Instruction>) {
 fn print_instruction(instruction: &Instruction) {
 	match instruction {
 		Instruction::Mov(dest, src) => {
-			println!("MOV {} <- {}", dest, src);
+			println!("{} <- {}", dest, src);
 		}
-		Instruction::Add(dest, src) => {
-			println!("ADD {} + {}", dest, src);
+		Instruction::Add(dest, src1, src2) => {
+			println!("{} + {} -> {}", src1, src2, dest);
 		}
-		Instruction::Sub(dest, src) => {
-			println!("SUB {} - {}", dest, src);
+		Instruction::Sub(dest, src1, src2) => {
+			println!("{} - {} -> {}", src1, src2, dest);
 		}
-		Instruction::Mul(dest, src) => {
-			println!("MUL {} * {}", dest, src);
+		Instruction::Mul(dest, src1, src2) => {
+			println!("{} * {} -> {}", src1, src2, dest);
 		}
 		Instruction::Div(dest, remainder_dest, value, div) => {
-			println!("DIV {} / {} -> {}, {}", value, div, dest, remainder_dest);
+			println!("{} / {} -> {}, {}", value, div, dest, remainder_dest);
 		}
-		Instruction::Xor(dest, src) => {
-			println!("XOR {}, {}", dest, src);
+		Instruction::Xor(dest, src1, src2) => {
+			println!("{} XOR {} -> {}", src1, src2, dest);
 		}
-		Instruction::And(dest, src) => {
-			println!("AND {} & {}", dest, src);
+		Instruction::And(dest, src1, src2) => {
+			println!("{} & {} -> {}", src1, src2, dest);
 		}
-		Instruction::Or(dest, src) => {
-			println!("OR {} | {}", dest, src);
+		Instruction::Or(dest, src1, src2) => {
+			println!("{} | {} -> {}", src1, src2, dest);
 		}
-		Instruction::Not(src) => {
-			println!("NOT {}", src);
+		Instruction::Not(src1, src2) => {
+			println!("NOT {} -> {}", src1, src2);
 		}
 		Instruction::Cmp(op1, op2) => {
 			println!("CMP {} =? {}", op1, op2);
@@ -689,6 +1175,9 @@ fn print_instruction(instruction: &Instruction) {
 		Instruction::Jle(label) => {
 			println!("JLE {:?}", label);
 		}
+		Instruction::Sete(dest) => {
+			println!("SETE -> {}", dest);
+		}
 		Instruction::Ret => {
 			println!("RET");
 		}
@@ -698,7 +1187,7 @@ fn print_instruction(instruction: &Instruction) {
 		Instruction::Pop(arg) => {
 			println!("POP {}", arg);
 		}
-		Instruction::Label(name) => {
+		Instruction::Label(name, _) => {
 			println!("{}:", name);
 		}
 		Instruction::ExternCall(num) => {
@@ -712,6 +1201,15 @@ fn print_instruction(instruction: &Instruction) {
 		}
 		Instruction::ProgramStart => {
 			println!("; Program Start");
+		}
+		Instruction::PreCallStackAlign(id) => {
+			println!("; Pre-Call Stack Alignment {}", id);
+		}
+		Instruction::PostCallStackAlign(id) => {
+			println!("; Post-Call Stack Alignment {}", id);
+		}
+		Instruction::Comment(comment) => {
+			println!("; {}", comment);
 		}
 	}
 }

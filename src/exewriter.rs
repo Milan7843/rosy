@@ -27,11 +27,17 @@ pub struct ImportEntry {
 }
 
 fn write_headers(file: &mut File, machine_code: &mut Vec<u8>, syscalls_to_resolve: &Vec<(String, usize)>, starting_location: usize) -> std::io::Result<()> {
-	let size_of_code: u32 = 0x200;
+	let size_of_code: u32 = machine_code.len() as u32;
+	let file_alignment: u32 = 0x200; // 512 bytes
+	let files_necessary_for_code = (size_of_code + file_alignment - 1) / file_alignment;
+	let aligned_size_of_code = files_necessary_for_code * file_alignment;
+	let code_section_location = 0x400; // Headers are 0x400 (1024) bytes
+	let code_section_padding = aligned_size_of_code - size_of_code;
+	let idata_section_location = code_section_location + aligned_size_of_code; // Headers (0x400) + aligned code size
+
 	let size_of_initialized_data: u32 = 0x800;
 	let size_of_uninitialized_data: u32 = 0x00;
 	let adress_of_entry_point: u32 = 0x1000 + starting_location as u32;
-	println!("Entry point at: 0x{:X}", adress_of_entry_point);
 	let base_of_code: u32 = 0x1000;
 	let image_version_major: u16 = 0x00;
 	let image_version_minor: u16 = 0x00;
@@ -202,8 +208,8 @@ fn write_headers(file: &mut File, machine_code: &mut Vec<u8>, syscalls_to_resolv
 	write_bytes(&mut file_headers, b".text\0\0\0"); // 0x00 - 0x07: Section name (8 bytes, null-padded)
 	let text_size_index = write_u32(&mut file_headers, 0x0000000B); // 0x08 - 0x0B: Virtual size (size when loaded into memory)
 	write_u32(&mut file_headers, 0x00001000); // 0x0C - 0x0F: Virtual address (RVA when loaded into memory) (4096)
-	write_u32(&mut file_headers, 0x00000200); // 0x10 - 0x13: Size of raw data (size in the file, must be multiple of file alignment) (512)
-	write_u32(&mut file_headers, 0x00000400); // 0x14 - 0x17: Pointer to raw data (file offset) (512)
+	write_u32(&mut file_headers, aligned_size_of_code); // 0x10 - 0x13: Size of raw data (size in the file, must be multiple of file alignment) (512)
+	write_u32(&mut file_headers, code_section_location); // 0x14 - 0x17: Pointer to raw data (file offset) (512)
 	write_u32(&mut file_headers, 0x00000000); // 0x18 - 0x1B: Pointer to relocations (not used for executable images)
 	write_u32(&mut file_headers, 0x00000000); // 0x1C - 0x1F: Pointer to line numbers (deprecated, set to 0)
 	write_u16(&mut file_headers, 0x0000); // 0x20 - 0x21: Number of relocations (not used for executable images)
@@ -215,7 +221,7 @@ fn write_headers(file: &mut File, machine_code: &mut Vec<u8>, syscalls_to_resolv
 	let idata_size_index = write_u32(&mut file_headers, 0x00000000); // 0x08 - 0x0B: Virtual size (size when loaded into memory)
 	write_u32(&mut file_headers, 0x00005000); // 0x0C - 0x0F: Virtual address (RVA when loaded into memory) (8192)
 	write_u32(&mut file_headers, 0x00000200); // 0x10 - 0x13: Size of raw data (size in the file, must be multiple of file alignment) (512)
-	write_u32(&mut file_headers, 0x00000600); // 0x14 - 0x17: Pointer to raw data (file offset) (1024)
+	write_u32(&mut file_headers, idata_section_location); // 0x14 - 0x17: Pointer to raw data (file offset) (1024)
 	write_u32(&mut file_headers, 0x00000000); // 0x18 - 0x1B: Pointer to relocations (not used for executable images)
 	write_u32(&mut file_headers, 0x00000000); // 0x1C - 0x1F: Pointer to line numbers (deprecated, set to 0)
 	write_u16(&mut file_headers, 0x0000); // 0x20 - 0x21: Number of relocations (not used for executable images)
@@ -248,18 +254,14 @@ fn write_headers(file: &mut File, machine_code: &mut Vec<u8>, syscalls_to_resolv
 			"ExitProcess".to_string(),
 			"GetStdHandle".to_string(),
 			"WriteFile".to_string(),
+			"HeapAlloc".to_string(),
+			"GetProcessHeap".to_string(),
+			"HeapFree".to_string(),
 		],
 		function_address_rvas: Vec::new(),
 	}];
 
 	let (iat_rva, iat_size) = write_idata(&mut idata, &mut imports, 0x5000);
-
-	println!(
-		"rvas: {}, {}, {}",
-		imports[0].function_address_rvas[0],
-		imports[0].function_address_rvas[1],
-		imports[0].function_address_rvas[2]
-	);
 
 	for (syscall_name, at) in syscalls_to_resolve {
 		let mut found = false;
@@ -283,46 +285,13 @@ fn write_headers(file: &mut File, machine_code: &mut Vec<u8>, syscalls_to_resolv
 		}
 	}
 
-	let get_std_handle_rel32 = imports[0].function_address_rvas[1] - (0x1000 + 11 + 6);
-	let write_file_rel32 = imports[0].function_address_rvas[2] - (0x1000 + 48 + 6);
-	let exit_process_rel32 = imports[0].function_address_rvas[0] - (0x1000 + 57 + 6);
-
-	let mut program: Vec<u8> = vec![
-		// prologue: reserve shadow space (Win64 ABI)
-		0x48, 0x83, 0xEC, 0x28, // sub rsp, 0x28
-		// GetStdHandle(-11)
-		0x48, 0xC7, 0xC1, 0xF5, 0xFF, 0xFF, 0xFF, // mov rcx, -11
-		0xFF, 0x15, 0xAA, 0xAA, 0xAA, 0xAA, // call [rip+rel32] ; GetStdHandle IAT
-		// save stdout handle
-		0x48, 0x89, 0xC1, // mov rcx, rax    ; hFile
-		// WriteFile(stdout, "a", 1, NULL, NULL)
-		0x48, 0x8D, 0x15, 0x24, 0x00, 0x00, 0x00, // lea rdx, [rip+0x24] ; &"a"
-		0x49, 0xB8, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov r8, 1
-		0x4D, 0x31, 0xC9, // xor r9, r9
-		0x48, 0x31, 0xC0, // xor rax, rax
-		0x48, 0x89, 0x44, 0x24, 0x20, // mov [rsp+0x20], rax ; lpOverlapped=NULL
-		0xFF, 0x15, 0xBB, 0xBB, 0xBB, 0xBB, // call [rip+rel32] ; WriteFile IAT
-		// ExitProcess(0)
-		0x48, 0x31, 0xC9, // xor rcx, rcx
-		0xFF, 0x15, 0xCC, 0xCC, 0xCC, 0xCC, // call [rip+rel32] ; ExitProcess IAT
-		// --- data ---
-		0x61, 0x00, // "a\0"
-	];
-
-	// Patch the relative calls
-	write_at_u32(&mut program, 13, get_std_handle_rel32);
-	write_at_u32(&mut program, 50, write_file_rel32);
-	write_at_u32(&mut program, 59, exit_process_rel32);
-
 	//write_bytes(&mut file_headers, &program2);
 	write_bytes(&mut file_headers, machine_code);
 
 	println!("Machine code: {:02X?}", machine_code);
 
-	//write_bytes(&mut file_headers, &[0x55, 0x48, 0x89, 0xe5, 0x90, 0x5d, 0xc3, 0x55, 0x48, 0x89, 0xe5, 0x48, 0x83, 0xec, 0x20, 0xe8, 0xec, 0xff, 0xff, 0xff, 0xb9, 0x00, 0x00, 0x00, 0x00, 0x48, 0x8b, 0x05, 0x18, 0x40, 0x00, 0x00, 0xff, 0xd0, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0xff, 0x25, 0x02, 0x40, 0x00, 0x00, 0x90, 0x90, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00]);
 	// THE DATA for our program will be at 0x600 (1536) in memory
-	padding_needed = 512 - machine_code.len();
-	write_zeroes(&mut file_headers, padding_needed);
+	write_zeroes(&mut file_headers, code_section_padding as usize);
 
 	let idata_size = idata.len() as u32;
 	write_at_u32(&mut file_headers, idata_size_index, idata_size); // Update idata section virtual size
