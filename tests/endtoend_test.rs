@@ -3,12 +3,12 @@ use assert_cmd::Command;
 use rosy::pipeline::run_compilation_pipeline;
 
 // Feature test checklist
-// - Addition:
+// v - Addition:
 // v  - Two integers
 // v  - Two variables
 // v  - Variable and integer
-//   - Integer and variable
-// - Subtraction:
+// v  - Integer and variable
+// v - Subtraction:
 // v  - Two integers
 // v  - Two variables
 // v  - Variable and integer
@@ -35,11 +35,11 @@ use rosy::pipeline::run_compilation_pipeline;
 // v  - Equals operator
 //   - Complex boolean expressions
 //   - Boolean operator precedence
-// - Comparisons:
-//   - Equals operator with integers
+// v- Comparisons:
+// v  - Equals operator with integers
 //   - Equals operator with strings
-//   - Equals operator with booleans
-//   - Equals operator with variables
+// v  - Equals operator with booleans
+// v  - Equals operator with variables
 //   - >= operator with integers
 //   - >= operator with variables
 //   - <= operator with integers
@@ -72,7 +72,7 @@ use rosy::pipeline::run_compilation_pipeline;
 // - If statements:
 // v  - If statement with true condition
 // v  - If statement with false condition
-//   - If statement with variable condition
+// v  - If statement with variable condition
 //   - If statement with complex condition
 // v  - If else statement with true condition
 // v  - If else statement with false condition
@@ -171,6 +171,19 @@ fn simple_print_with_variable_and_integer_addition() {
 	let program: Vec<&str> = vec![
 		"a = 1",
 		"c = a + 2",
+		"print(c)"
+	];
+
+	let expected_output = "3";
+
+	run_and_compare(program, expected_output.to_string());
+}
+
+#[test]
+fn simple_print_with_integer_and_variable_addition() {
+	let program: Vec<&str> = vec![
+		"a = 1",
+		"c = 2 + a",
 		"print(c)"
 	];
 
